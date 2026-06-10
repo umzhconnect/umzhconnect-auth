@@ -1,0 +1,22 @@
+meta {
+  name: Validate garbage token (422)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{validatorUrl}}/validate
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "token": "not.a.jwt"
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.valid: eq false
+}

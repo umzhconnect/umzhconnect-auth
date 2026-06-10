@@ -1,0 +1,35 @@
+meta {
+  name: Get Placer Token (L1 + RFC 9396 context)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  grant_type: client_credentials
+  client_id: {{placerClientId}}
+  client_secret: {{placerClientSecret}}
+  scope: system/ServiceRequest.rs system/Patient.r
+  authorization_details: [{"type":"umzh-connect-context","identifier":"{{contextReference}}"}]
+}
+
+assert {
+  res.status: eq 200
+  res.body.access_token: isDefined
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    const token = res.getBody().access_token;
+    bru.setVar("placerContextToken", token);
+    // Sanity: the FhirContextMapper must have mapped authorization_details
+    // into a fhirContext claim.
+    const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+    console.log("fhirContext:", JSON.stringify(claims.fhirContext));
+  }
+}

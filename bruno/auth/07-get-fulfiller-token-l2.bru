@@ -1,0 +1,60 @@
+meta {
+  name: Get Fulfiller Token (L2, private_key_jwt)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  grant_type: client_credentials
+  client_id: {{fulfillerL2ClientId}}
+  client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+  client_assertion: {{fulfillerClientAssertion}}
+  scope: system/Task.cru system/ServiceRequest.r system/Patient.r
+}
+
+assert {
+  res.status: eq 200
+  res.body.access_token: isDefined
+}
+
+script:pre-request {
+  // See 06-get-placer-token-l2.bru - same flow with the fulfiller demo key.
+  const crypto = require("crypto");
+  const fs = require("fs");
+  const path = require("path");
+
+  const keysDir = bru.getEnvVar("l2KeysDir") || path.resolve(bru.cwd(), "..", "keys");
+  const pem = fs.readFileSync(path.join(keysDir, "fulfiller-l2.key"), "utf8");
+
+  const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+  const tokenEndpoint = `${bru.getEnvVar("keycloakUrl")}/realms/${bru.getEnvVar("realm")}/protocol/openid-connect/token`;
+
+  const header = { alg: "RS256", typ: "JWT", kid: "fulfiller-l2" };
+  const payload = {
+    iss: bru.getEnvVar("fulfillerL2ClientId"),
+    sub: bru.getEnvVar("fulfillerL2ClientId"),
+    aud: tokenEndpoint,
+    exp: now + 60,
+    jti: crypto.randomUUID(),
+  };
+
+  const signingInput = `${b64url(header)}.${b64url(payload)}`;
+  const signature = crypto
+    .sign("RSA-SHA256", Buffer.from(signingInput), pem)
+    .toString("base64url");
+
+  bru.setVar("fulfillerClientAssertion", `${signingInput}.${signature}`);
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setVar("fulfillerL2Token", res.getBody().access_token);
+  }
+}

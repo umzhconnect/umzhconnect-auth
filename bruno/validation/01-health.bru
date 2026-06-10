@@ -1,0 +1,16 @@
+meta {
+  name: Validator Health
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{validatorUrl}}/healthz
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq ok
+}

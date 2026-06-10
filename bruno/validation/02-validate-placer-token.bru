@@ -1,0 +1,22 @@
+meta {
+  name: Validate Placer Token (report)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{validatorUrl}}/validate
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "token": "{{placerToken}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.valid: eq true
+}

@@ -1,0 +1,25 @@
+meta {
+  name: Read Organization without scope (403)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{validatorUrl}}/fhir/Organization/org-1
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{placerToken}}
+}
+
+docs {
+  The placer client is not granted system/Organization.r (only the fulfiller
+  is, mirroring the sandbox realm), so this read must be rejected with 403.
+  Run auth/03 first to obtain placerToken.
+}
+
+assert {
+  res.status: eq 403
+}

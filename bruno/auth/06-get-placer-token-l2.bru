@@ -1,0 +1,62 @@
+meta {
+  name: Get Placer Token (L2, private_key_jwt)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  grant_type: client_credentials
+  client_id: {{placerL2ClientId}}
+  client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+  client_assertion: {{placerClientAssertion}}
+  scope: system/Task.cru system/ServiceRequest.rs system/Patient.r
+}
+
+assert {
+  res.status: eq 200
+  res.body.access_token: isDefined
+}
+
+script:pre-request {
+  // Signs an RFC 7523 client assertion with the demo Level-2 private key
+  // (../keys/placer-l2.key). Requires Bruno "developer mode" (filesystem
+  // access). Override the key location with the l2KeysDir environment var.
+  const crypto = require("crypto");
+  const fs = require("fs");
+  const path = require("path");
+
+  const keysDir = bru.getEnvVar("l2KeysDir") || path.resolve(bru.cwd(), "..", "keys");
+  const pem = fs.readFileSync(path.join(keysDir, "placer-l2.key"), "utf8");
+
+  const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+  const tokenEndpoint = `${bru.getEnvVar("keycloakUrl")}/realms/${bru.getEnvVar("realm")}/protocol/openid-connect/token`;
+
+  const header = { alg: "RS256", typ: "JWT", kid: "placer-l2" };
+  const payload = {
+    iss: bru.getEnvVar("placerL2ClientId"),
+    sub: bru.getEnvVar("placerL2ClientId"),
+    aud: tokenEndpoint,   // RFC 7523: pins the assertion to this endpoint
+    exp: now + 60,        // short-lived (SMART: <= 5 min)
+    jti: crypto.randomUUID(), // unique per request (replay guard)
+  };
+
+  const signingInput = `${b64url(header)}.${b64url(payload)}`;
+  const signature = crypto
+    .sign("RSA-SHA256", Buffer.from(signingInput), pem)
+    .toString("base64url");
+
+  bru.setVar("placerClientAssertion", `${signingInput}.${signature}`);
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setVar("placerL2Token", res.getBody().access_token);
+  }
+}

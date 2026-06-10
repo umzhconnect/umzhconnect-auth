@@ -1,0 +1,6 @@
+{
+  "version": "1",
+  "name": "UMZH Connect Auth",
+  "type": "collection",
+  "ignore": ["node_modules", ".git"]
+}

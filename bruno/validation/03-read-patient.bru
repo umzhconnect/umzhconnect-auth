@@ -1,0 +1,20 @@
+meta {
+  name: Read Patient (scope-gated)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{validatorUrl}}/fhir/Patient/pat-1
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{placerToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.resourceType: eq Patient
+}

@@ -1,0 +1,29 @@
+meta {
+  name: Create Task (write scope)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{validatorUrl}}/fhir/Task
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{placerToken}}
+}
+
+body:json {
+  {
+    "resourceType": "Task",
+    "status": "requested",
+    "intent": "order",
+    "focus": { "reference": "{{contextReference}}" }
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.resourceType: eq Task
+}

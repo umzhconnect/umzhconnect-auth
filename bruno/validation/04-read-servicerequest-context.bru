@@ -1,0 +1,26 @@
+meta {
+  name: Read ServiceRequest (context-gated)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{validatorUrl}}/fhir/ServiceRequest/sr-123
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{placerContextToken}}
+}
+
+docs {
+  Requires a context-bound token (run auth/05 first). The validator enforces
+  that the token's fhirContext claim covers ServiceRequest/sr-123 - a plain
+  L1 token without authorization_details is rejected with 403.
+}
+
+assert {
+  res.status: eq 200
+  res.body.resourceType: eq ServiceRequest
+}

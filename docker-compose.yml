@@ -1,0 +1,146 @@
+# =============================================================================
+# UMZH Connect Authentication Server - local development stack
+#
+#   postgres         Keycloak backing store
+#   keycloak         Authorization Server (custom image with FhirContextMapper)
+#   keycloak-config  one-shot Terraform apply that configures the realm
+#   jwks-server      serves the Level-2 demo client public JWKS (./keys)
+#   token-validator  mock resource server validating tokens per the IG
+#                    (dev/test aid only - NOT a production artifact)
+#
+# Quick start:  docker compose up -d --build
+# Issuer:       http://localhost:8180/realms/umzh-connect
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: umzh-auth-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - umzh-auth-net
+
+  keycloak:
+    build: ./keycloak
+    container_name: umzh-auth-keycloak
+    # start-dev keeps local iteration simple (http, no strict hostname checks).
+    # The production snapshot will run `start --optimized` from the same image.
+    command: start-dev
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      KC_DB_USERNAME: ${POSTGRES_USER}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KC_HEALTH_ENABLED: 'true'
+      KC_HTTP_PORT: 8080
+      # Published issuer seen in token `iss` claims. Kept identical to the
+      # umzhconnect-sandbox so issued tokens are interchangeable.
+      KC_HOSTNAME: 'http://localhost:${KEYCLOAK_PORT}'
+      KC_HOSTNAME_STRICT: 'false'
+      # Lets in-network services (terraform, validator) talk to keycloak:8080
+      # while the published issuer stays localhost:8180.
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: 'true'
+      KC_PROXY_HEADERS: xforwarded
+    ports:
+      - '${KEYCLOAK_PORT}:8080'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # Keycloak 26 exposes /health/ready on the management port 9000
+      test:
+        [
+          'CMD-SHELL',
+          "exec 3<>/dev/tcp/127.0.0.1/9000;echo -e 'GET /health/ready HTTP/1.1\r\nhost: localhost\r\nConnection: close\r\n\r\n' >&3;grep -q '200' <&3",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - umzh-auth-net
+
+  # One-shot job: applies the Terraform realm configuration against the
+  # running Keycloak. State is written to ./keycloak/terraform (gitignored).
+  # Re-run after config changes with:  docker compose up keycloak-config
+  keycloak-config:
+    image: hashicorp/terraform:1.9
+    container_name: umzh-auth-keycloak-config
+    working_dir: /workspace
+    volumes:
+      - ./keycloak/terraform:/workspace
+    environment:
+      TF_VAR_keycloak_url: http://keycloak:8080
+      TF_VAR_keycloak_admin_username: ${KEYCLOAK_ADMIN}
+      TF_VAR_keycloak_admin_password: ${KEYCLOAK_ADMIN_PASSWORD}
+      TF_VAR_placer_client_secret: ${PLACER_CLIENT_SECRET}
+      TF_VAR_fulfiller_client_secret: ${FULFILLER_CLIENT_SECRET}
+      # Level-2 client JWKS, fetched by Keycloak over the compose network.
+      # For the sandbox drop-in these become the APISIX gateway URLs instead.
+      TF_VAR_placer_l2_jwks_url: http://jwks-server/placer-l2.jwks.json
+      TF_VAR_fulfiller_l2_jwks_url: http://jwks-server/fulfiller-l2.jwks.json
+    entrypoint:
+      [
+        'sh',
+        '-c',
+        'terraform init -input=false && terraform apply -auto-approve -input=false',
+      ]
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    networks:
+      - umzh-auth-net
+
+  # Serves the demo Level-2 client public keys so Keycloak can resolve the
+  # clients' jwks.url. Stands in for the sandbox's APISIX /jwks.json endpoints.
+  jwks-server:
+    image: nginx:1.27-alpine
+    container_name: umzh-auth-jwks-server
+    volumes:
+      - ./keys:/usr/share/nginx/html:ro
+    ports:
+      - '${JWKS_PORT}:80'
+    networks:
+      - umzh-auth-net
+
+  # Mock resource server: validates access tokens per the UMZH Connect IG
+  # security spec and exposes sample protected endpoints. Dev/test only.
+  token-validator:
+    build: ./token-validator
+    container_name: umzh-auth-token-validator
+    environment:
+      PORT: 8086
+      # Expected `iss` claim = the published (frontend) issuer
+      ISSUER: http://localhost:${KEYCLOAK_PORT}/realms/umzh-connect
+      # Signature keys are fetched over the compose network (backchannel)
+      JWKS_URI: http://keycloak:8080/realms/umzh-connect/protocol/openid-connect/certs
+      # Per IG the token `aud` must be the target FHIR server base URL.
+      # Keycloak's default client_credentials audience differs, so the check
+      # is reported but only enforced when EXPECTED_AUDIENCE is set.
+      # EXPECTED_AUDIENCE: http://localhost:8086/fhir
+    ports:
+      - '${VALIDATOR_PORT}:8086'
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    networks:
+      - umzh-auth-net
+
+volumes:
+  postgres_data:
+
+networks:
+  umzh-auth-net:
+    driver: bridge

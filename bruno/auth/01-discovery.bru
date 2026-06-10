@@ -1,0 +1,18 @@
+meta {
+  name: OIDC Discovery
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{keycloakUrl}}/realms/{{realm}}/.well-known/openid-configuration
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.issuer: eq {{keycloakUrl}}/realms/{{realm}}
+  res.body.token_endpoint: isDefined
+  res.body.jwks_uri: isDefined
+}

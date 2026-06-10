@@ -1,0 +1,24 @@
+meta {
+  name: Read ServiceRequest without context (403)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{validatorUrl}}/fhir/ServiceRequest/sr-123
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{placerToken}}
+}
+
+docs {
+  placerToken (auth/03) has the system/ServiceRequest.rs scope but no
+  fhirContext claim, so the context gate must reject the read with 403.
+}
+
+assert {
+  res.status: eq 403
+}

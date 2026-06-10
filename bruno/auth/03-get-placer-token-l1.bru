@@ -1,0 +1,29 @@
+meta {
+  name: Get Placer Token (L1, client_secret)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  grant_type: client_credentials
+  client_id: {{placerClientId}}
+  client_secret: {{placerClientSecret}}
+  scope: system/Task.cru system/ServiceRequest.rs system/Patient.r
+}
+
+assert {
+  res.status: eq 200
+  res.body.access_token: isDefined
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setVar("placerToken", res.getBody().access_token);
+  }
+}
