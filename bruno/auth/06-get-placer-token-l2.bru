@@ -12,7 +12,7 @@ post {
 
 body:form-urlencoded {
   grant_type: client_credentials
-  client_id: {{placerL2ClientId}}
+  client_id: {{placerClientId}}
   client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
   client_assertion: {{placerClientAssertion}}
   scope: system/Task.cru system/ServiceRequest.rs system/Patient.r
@@ -38,10 +38,11 @@ script:pre-request {
   const now = Math.floor(Date.now() / 1000);
   const tokenEndpoint = `${bru.getEnvVar("keycloakUrl")}/realms/${bru.getEnvVar("realm")}/protocol/openid-connect/token`;
 
+  const clientId = bru.getEnvVar("placerClientId");
   const header = { alg: "RS256", typ: "JWT", kid: "placer-l2" };
   const payload = {
-    iss: bru.getEnvVar("placerL2ClientId"),
-    sub: bru.getEnvVar("placerL2ClientId"),
+    iss: clientId,
+    sub: clientId,
     aud: tokenEndpoint,   // RFC 7523: pins the assertion to this endpoint
     exp: now + 60,        // short-lived (SMART: <= 5 min)
     jti: crypto.randomUUID(), // unique per request (replay guard)

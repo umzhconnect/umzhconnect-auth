@@ -1,5 +1,5 @@
 meta {
-  name: Get Placer Token (L1 + RFC 9396 context)
+  name: Get Placer Token (L2 + RFC 9396 context)
   type: http
   seq: 5
 }
@@ -13,7 +13,8 @@ post {
 body:form-urlencoded {
   grant_type: client_credentials
   client_id: {{placerClientId}}
-  client_secret: {{placerClientSecret}}
+  client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+  client_assertion: {{placerClientAssertion}}
   scope: system/ServiceRequest.rs system/Patient.r
   authorization_details: [{"type":"umzh-connect-context","identifier":"{{contextReference}}"}]
 }
@@ -21,6 +22,39 @@ body:form-urlencoded {
 assert {
   res.status: eq 200
   res.body.access_token: isDefined
+}
+
+script:pre-request {
+  // Signs an RFC 7523 client assertion with the demo placer private key.
+  // Requires Bruno "developer mode" (filesystem access).
+  // Override key location with the l2KeysDir environment var.
+  const crypto = require("crypto");
+  const fs = require("fs");
+  const path = require("path");
+
+  const keysDir = bru.getEnvVar("l2KeysDir") || path.resolve(bru.cwd(), "..", "keys");
+  const pem = fs.readFileSync(path.join(keysDir, "placer-l2.key"), "utf8");
+
+  const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+  const tokenEndpoint = `${bru.getEnvVar("keycloakUrl")}/realms/${bru.getEnvVar("realm")}/protocol/openid-connect/token`;
+
+  const clientId = bru.getEnvVar("placerClientId");
+  const header = { alg: "RS256", typ: "JWT", kid: "placer-l2" };
+  const payload = {
+    iss: clientId,
+    sub: clientId,
+    aud: tokenEndpoint,
+    exp: now + 60,
+    jti: crypto.randomUUID(),
+  };
+
+  const signingInput = `${b64url(header)}.${b64url(payload)}`;
+  const signature = crypto
+    .sign("RSA-SHA256", Buffer.from(signingInput), pem)
+    .toString("base64url");
+
+  bru.setVar("placerClientAssertion", `${signingInput}.${signature}`);
 }
 
 script:post-response {
@@ -31,5 +65,6 @@ script:post-response {
     // into a fhirContext claim.
     const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
     console.log("fhirContext:", JSON.stringify(claims.fhirContext));
+    console.log("aud:", JSON.stringify(claims.aud));
   }
 }
