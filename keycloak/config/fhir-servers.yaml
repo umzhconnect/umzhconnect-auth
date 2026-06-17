@@ -1,0 +1,15 @@
+# FHIR server registry — the network of audience targets.
+#
+# Each key becomes a Keycloak client scope named aud:<key>.
+# An audience protocol mapper on that scope sets aud = url in every token
+# issued to a KC client that has this scope as a default scope.
+#
+# Adding a new hospital's FHIR server: add one entry here, then terraform apply.
+# The url must be the FHIR base URL the resource server validates aud against.
+servers:
+  fhir-hospitalp:
+    url: "http://localhost:8084/fhir"
+    description: "HospitalP FHIR server (sandbox: HAPI FHIR on port 8084)"
+  fhir-hospitalf:
+    url: "http://localhost:8084/fhir"
+    description: "HospitalF FHIR server (sandbox: HAPI FHIR on port 8084)"

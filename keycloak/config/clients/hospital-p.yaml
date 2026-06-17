@@ -1,0 +1,31 @@
+# HospitalP — Placer
+#
+# Sandbox equivalent of the former placer-client-l2 KC client.
+# Generated KC client IDs: hospital-p--{app_id}--{server_key}
+
+org_id: "hospital-p"
+display_name: "HospitalP"
+role: "placer"
+tenant: "placer"
+org_reference: "http://localhost:8084/fhir/Organization/HospitalP"
+
+apps:
+  placer-app:
+    display_name: "Placer Application"
+    jwks_url: "http://jwks-server/placer-l2.jwks.json"
+    audiences:
+      fhir-hospitalf:
+        scopes:
+          - "system/Task.cru"
+          - "system/ServiceRequest.rs"
+          - "system/Patient.r"
+          - "system/Condition.r"
+          - "system/MedicationStatement.r"
+          - "system/AllergyIntolerance.r"
+          - "system/Coverage.r"
+          - "system/Observation.r"
+          - "system/Procedure.r"
+          - "system/Immunization.r"
+          - "system/DiagnosticReport.r"
+          - "system/QuestionnaireResponse.cru"
+          - "system/ImagingStudy.r"

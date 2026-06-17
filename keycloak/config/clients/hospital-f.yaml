@@ -1,0 +1,34 @@
+# HospitalF — Fulfiller
+#
+# Sandbox equivalent of the former fulfiller-client-l2 KC client.
+# Generated KC client IDs: hospital-f--{app_id}--{server_key}
+
+org_id: "hospital-f"
+display_name: "HospitalF"
+role: "fulfiller"
+tenant: "fulfiller"
+org_reference: "http://localhost:8084/fhir/Organization/HospitalF"
+
+apps:
+  fulfiller-app:
+    display_name: "Fulfiller Application"
+    jwks_url: "http://jwks-server/fulfiller-l2.jwks.json"
+    audiences:
+      fhir-hospitalp:
+        scopes:
+          - "system/Task.cru"
+          - "system/ServiceRequest.r"
+          - "system/Patient.r"
+          - "system/Condition.r"
+          - "system/MedicationStatement.r"
+          - "system/AllergyIntolerance.r"
+          - "system/Coverage.r"
+          - "system/Observation.r"
+          - "system/Procedure.r"
+          - "system/Immunization.r"
+          - "system/DiagnosticReport.r"
+          - "system/QuestionnaireResponse.cru"
+          - "system/ImagingStudy.r"
+          - "system/Organization.r"
+          - "system/Practitioner.r"
+          - "system/PractitionerRole.r"
