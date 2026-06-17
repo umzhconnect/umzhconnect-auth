@@ -1,0 +1,42 @@
+org_id: "hospital-c"
+display_name: "Hospital C"
+role: "placer"
+tenant: "placer"
+org_reference: "https://fhir.hospital-c.example/fhir/Organization/HospitalC"
+
+apps:
+  oncology-app:
+    display_name: "Oncology System"
+    jwks_url: "http://jwks-server/placer-l2.jwks.json"
+    audiences:
+      fhir-hospital-a:
+        scopes:
+          - "system/Task.cru"
+          - "system/ServiceRequest.rs"
+          - "system/Patient.r"
+          - "system/Condition.r"
+          - "system/Procedure.r"
+      fhir-hospital-b:
+        scopes:
+          - "system/ServiceRequest.rs"
+          - "system/Patient.r"
+          - "system/DiagnosticReport.r"
+          - "system/ImagingStudy.r"
+      fhir-hospital-d:
+        scopes:
+          - "system/Task.cru"
+          - "system/Patient.r"
+          - "system/Condition.r"
+          - "system/Observation.r"
+          - "system/MedicationStatement.r"
+      fhir-hospital-e:
+        scopes:
+          - "system/Patient.r"
+          - "system/Procedure.r"
+          - "system/Immunization.r"
+          - "system/Coverage.r"
+      fhir-hospital-c:
+        scopes:
+          - "system/Organization.r"
+          - "system/Practitioner.r"
+          - "system/PractitionerRole.r"

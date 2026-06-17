@@ -1,0 +1,40 @@
+org_id: "hospital-a"
+display_name: "Hospital A"
+role: "placer"
+tenant: "placer"
+org_reference: "https://fhir.hospital-a.example/fhir/Organization/HospitalA"
+
+apps:
+  his:
+    display_name: "HIS"
+    jwks_url: "http://jwks-server/placer-l2.jwks.json"
+    audiences:
+      fhir-hospital-b:
+        scopes:
+          - "system/ServiceRequest.rs"
+          - "system/Patient.r"
+          - "system/Condition.r"
+          - "system/AllergyIntolerance.r"
+      fhir-hospital-c:
+        scopes:
+          - "system/Task.cru"
+          - "system/ServiceRequest.r"
+          - "system/Patient.r"
+          - "system/Observation.r"
+      fhir-hospital-d:
+        scopes:
+          - "system/Patient.r"
+          - "system/ImagingStudy.r"
+          - "system/DiagnosticReport.r"
+          - "system/Procedure.r"
+      fhir-hospital-e:
+        scopes:
+          - "system/ServiceRequest.rs"
+          - "system/Patient.r"
+          - "system/Condition.r"
+          - "system/MedicationStatement.r"
+          - "system/Coverage.r"
+      fhir-hospital-a:
+        scopes:
+          - "system/Organization.r"
+          - "system/Practitioner.r"

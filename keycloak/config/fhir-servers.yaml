@@ -7,9 +7,18 @@
 # Adding a new hospital's FHIR server: add one entry here, then terraform apply.
 # The url must be the FHIR base URL the resource server validates aud against.
 servers:
-  fhir-hospitalp:
-    url: "http://localhost:8084/fhir"
-    description: "HospitalP FHIR server (sandbox: HAPI FHIR on port 8084)"
-  fhir-hospitalf:
-    url: "http://localhost:8084/fhir"
-    description: "HospitalF FHIR server (sandbox: HAPI FHIR on port 8084)"
+  fhir-hospital-a:
+    url: "https://fhir.hospital-a.example/fhir"
+    description: "Hospital A FHIR server"
+  fhir-hospital-b:
+    url: "https://fhir.hospital-b.example/fhir"
+    description: "Hospital B FHIR server"
+  fhir-hospital-c:
+    url: "https://fhir.hospital-c.example/fhir"
+    description: "Hospital C FHIR server"
+  fhir-hospital-d:
+    url: "https://fhir.hospital-d.example/fhir"
+    description: "Hospital D FHIR server"
+  fhir-hospital-e:
+    url: "https://fhir.hospital-e.example/fhir"
+    description: "Hospital E FHIR server"
