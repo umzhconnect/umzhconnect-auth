@@ -1,118 +1,42 @@
-# Machine-to-machine clients
+# Machine-to-machine clients — YAML-driven, L2 (private_key_jwt) only.
 #
-# Four clients, mirroring the sandbox realm:
-#   placer-client / fulfiller-client          Level 1 (client_secret) - sandbox/PoC
-#   placer-client-l2 / fulfiller-client-l2    Level 2 (private_key_jwt) - production baseline
+# Config lives in keycloak/config/clients/<hospital>.yaml.
+# One KC client is generated per (org, app, audience) triple.
+# KC client_id convention: {org_id}--{app_id}--{server_key}
 #
-# Every M2M client carries the same mapper set:
-#   - org-reference-mapper  hardcoded extensions.umzhconnect.organization_reference
-#                           (IG: set by the AS from the onboarding record)
-#   - fhir-context-mapper   custom provider: RFC 9396 authorization_details
-#                           (type umzh-connect-context) -> fhirContext claim
-#   - tenant-mapper         sandbox routing hint (placer | fulfiller)
-#   - realm-roles           service-account realm roles -> realm_roles claim
+# Each KC client has exactly one audience (its aud: scope is assigned as a
+# default scope), so the AS enforces the audience-scope binding at the client
+# level. No optional scopes — the per-audience scope set in the YAML is the
+# complete grant.
+#
+# See audience_architecture.md for the full design rationale and D3 migration path.
 
 locals {
-  # Scope sets per party (verbatim from the sandbox realm-export.json).
-  placer_default_scopes = [
-    "system/Task.cru",
-    "system/ServiceRequest.rs",
-    "system/Patient.r",
-    "system/Condition.r",
-    "system/MedicationStatement.r",
-    "system/AllergyIntolerance.r",
-    "system/Coverage.r",
-    "system/Observation.r",
-    "system/Procedure.r",
-    "system/Immunization.r",
-    "system/DiagnosticReport.r",
-    "system/QuestionnaireResponse.cru",
-    "system/ImagingStudy.r",
-  ]
+  _org_files = fileset("${path.module}/../config/clients", "*.yaml")
+  _orgs = {
+    for f in local._org_files :
+    trimsuffix(f, ".yaml") => yamldecode(file("${path.module}/../config/clients/${f}"))
+  }
 
-  fulfiller_default_scopes = [
-    "system/Task.cru",
-    "system/ServiceRequest.r",
-    "system/Patient.r",
-    "system/Condition.r",
-    "system/MedicationStatement.r",
-    "system/AllergyIntolerance.r",
-    "system/Coverage.r",
-    "system/Observation.r",
-    "system/Procedure.r",
-    "system/Immunization.r",
-    "system/DiagnosticReport.r",
-    "system/QuestionnaireResponse.cru",
-    "system/ImagingStudy.r",
-    "system/Organization.r",
-    "system/Practitioner.r",
-    "system/PractitionerRole.r",
-  ]
-
-  placer_optional_scopes = [
-    "smart-task-write",
-    "smart-servicerequest-read",
-    "smart-clinical-read",
-    "smart-questionnaire-write",
-  ]
-
-  fulfiller_optional_scopes = [
-    "smart-task-write",
-    "smart-servicerequest-read",
-    "smart-clinical-read",
-    "smart-patient-read",
-    "smart-questionnaire-write",
-  ]
-
+  # Flatten org → apps → audiences into a flat map keyed by KC client_id.
   m2m_clients = {
-    "placer-client" = {
-      name            = "Placer (HospitalP) Machine Client"
-      description     = "M2M client for HospitalP - Level 1 client credentials"
-      level           = 1
-      secret          = var.placer_client_secret
-      jwks_url        = null
-      tenant          = "placer"
-      org_reference   = var.placer_org_reference
-      role            = "placer"
-      default_scopes  = local.placer_default_scopes
-      optional_scopes = local.placer_optional_scopes
-    }
-    "fulfiller-client" = {
-      name            = "Fulfiller (HospitalF) Machine Client"
-      description     = "M2M client for HospitalF - Level 1 client credentials"
-      level           = 1
-      secret          = var.fulfiller_client_secret
-      jwks_url        = null
-      tenant          = "fulfiller"
-      org_reference   = var.fulfiller_org_reference
-      role            = "fulfiller"
-      default_scopes  = local.fulfiller_default_scopes
-      optional_scopes = local.fulfiller_optional_scopes
-    }
-    "placer-client-l2" = {
-      name            = "Placer (HospitalP) Machine Client - Level 2"
-      description     = "M2M client for HospitalP - private_key_jwt baseline"
-      level           = 2
-      secret          = null
-      jwks_url        = var.placer_l2_jwks_url
-      tenant          = "placer"
-      org_reference   = var.placer_org_reference
-      role            = "placer"
-      default_scopes  = local.placer_default_scopes
-      optional_scopes = local.placer_optional_scopes
-    }
-    "fulfiller-client-l2" = {
-      name            = "Fulfiller (HospitalF) Machine Client - Level 2"
-      description     = "M2M client for HospitalF - private_key_jwt baseline"
-      level           = 2
-      secret          = null
-      jwks_url        = var.fulfiller_l2_jwks_url
-      tenant          = "fulfiller"
-      org_reference   = var.fulfiller_org_reference
-      role            = "fulfiller"
-      default_scopes  = local.fulfiller_default_scopes
-      optional_scopes = local.fulfiller_optional_scopes
-    }
+    for triple in flatten([
+      for _org_key, org in local._orgs : [
+        for app_id, app in org.apps : [
+          for server_key, aud_cfg in app.audiences : {
+            client_id     = "${org.org_id}--${app_id}--${server_key}"
+            name          = "${org.display_name} / ${app.display_name} → ${server_key}"
+            description   = "L2 M2M: ${org.display_name} ${app.display_name} calling ${server_key}"
+            jwks_url      = app.jwks_url
+            tenant        = org.tenant
+            role          = org.role
+            org_reference = org.org_reference
+            server_key    = server_key
+            scopes        = aud_cfg.scopes
+          }
+        ]
+      ]
+    ]) : triple.client_id => triple
   }
 }
 
@@ -130,35 +54,31 @@ resource "keycloak_openid_client" "m2m" {
   standard_flow_enabled        = false
   direct_access_grants_enabled = false
 
-  # Level 1: client-secret | Level 2: client-jwt with keys fetched from the
-  # party's published JWKS (SMART Backend Services discovery shape).
-  client_authenticator_type = each.value.level == 2 ? "client-jwt" : "client-secret"
-  client_secret             = each.value.secret
+  client_authenticator_type = "client-jwt"
 
-  extra_config = each.value.level == 2 ? {
+  extra_config = {
     "use.jwks.url" = "true"
     "jwks.url"     = each.value.jwks_url
-  } : {}
+  }
 }
 
 resource "keycloak_openid_client_default_scopes" "m2m" {
   for_each = local.m2m_clients
 
-  realm_id       = keycloak_realm.umzh_connect.id
-  client_id      = keycloak_openid_client.m2m[each.key].id
-  default_scopes = each.value.default_scopes
+  realm_id  = keycloak_realm.umzh_connect.id
+  client_id = keycloak_openid_client.m2m[each.key].id
 
-  depends_on = [keycloak_openid_client_scope.system]
-}
+  # Audience-specific SMART scopes + the aud: scope for this client's one target.
+  # The aud: scope carries the audience mapper that sets aud = FHIR server URL.
+  default_scopes = concat(
+    each.value.scopes,
+    ["aud:${each.value.server_key}"]
+  )
 
-resource "keycloak_openid_client_optional_scopes" "m2m" {
-  for_each = local.m2m_clients
-
-  realm_id        = keycloak_realm.umzh_connect.id
-  client_id       = keycloak_openid_client.m2m[each.key].id
-  optional_scopes = each.value.optional_scopes
-
-  depends_on = [keycloak_openid_client_scope.smart]
+  depends_on = [
+    keycloak_openid_client_scope.system,
+    keycloak_openid_client_scope.aud,
+  ]
 }
 
 # Party realm role on the service account (drives the realm_roles claim).
@@ -172,7 +92,7 @@ resource "keycloak_openid_client_service_account_realm_role" "m2m" {
   depends_on = [keycloak_role.placer, keycloak_role.fulfiller]
 }
 
-# --- Protocol mappers ----------------------------------------------------------
+# --- Protocol mappers -----------------------------------------------------------
 
 resource "keycloak_openid_hardcoded_claim_protocol_mapper" "org_reference" {
   for_each = local.m2m_clients
@@ -222,9 +142,6 @@ resource "keycloak_openid_user_realm_role_protocol_mapper" "realm_roles" {
   add_to_userinfo     = false
 }
 
-# Custom provider shipped in the Keycloak image (keycloak/mapper):
-# maps RFC 9396 authorization_details of type "umzh-connect-context" to the
-# SMART v2 fhirContext claim.
 resource "keycloak_generic_protocol_mapper" "fhir_context" {
   for_each = local.m2m_clients
 
