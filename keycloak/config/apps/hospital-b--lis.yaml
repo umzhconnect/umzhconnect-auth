@@ -1,7 +1,7 @@
 org_id: "hospital-b"
 app_id: "lis"
 org_display_name: "Hospital B"
-app_display_name: "LIS"
+app_display_name: "Laboratory Information System"
 org_reference: "https://fhir.hospital-b.example/fhir/Organization/HospitalB"
 role: "fulfiller"
 tenant: "fulfiller"

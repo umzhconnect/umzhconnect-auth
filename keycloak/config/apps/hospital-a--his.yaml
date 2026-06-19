@@ -1,7 +1,7 @@
 org_id: "hospital-a"
 app_id: "his"
 org_display_name: "Hospital A"
-app_display_name: "HIS"
+app_display_name: "Hospital Information System"
 org_reference: "https://fhir.hospital-a.example/fhir/Organization/HospitalA"
 role: "placer"
 tenant: "placer"
