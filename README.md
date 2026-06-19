@@ -133,6 +133,12 @@ To swap this Keycloak into `umzhconnect-sandbox`:
    so APISIX/OPA and the web app keep working. Acceptance test: run the
    sandbox's Hurl suites (`tests/`).
 
+## Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/validate-grants.py` | Validates `config/apps/` against `config/grants/`: every app key referenced in a grants file must have a matching app config, and every `required_scope` declared by an app must be covered by each grant targeting it. Run before `terraform apply` after any config change. Requires `pyyaml` (`pip install pyyaml`). |
+
 ## Architecture decisions
 
 Significant design choices and conscious non-decisions are recorded as ADRs in
