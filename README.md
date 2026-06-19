@@ -133,6 +133,11 @@ To swap this Keycloak into `umzhconnect-sandbox`:
    so APISIX/OPA and the web app keep working. Acceptance test: run the
    sandbox's Hurl suites (`tests/`).
 
+## Architecture decisions
+
+Significant design choices and conscious non-decisions are recorded as ADRs in
+[`docs/adr/`](docs/adr/README.md).
+
 ## Production notes
 
 Only the Keycloak image + realm configuration are production-bound. The
