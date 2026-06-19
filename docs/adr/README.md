@@ -36,3 +36,4 @@ Do **not** write an ADR for implementation details, routine config changes, or d
 |----|-------|--------|
 | [0001](0001-defer-auth-level-claim.md) | Defer `auth_level` claim until L3 is introduced | Accepted |
 | [0002](0002-audience-claim-design.md) | Audience claim design: one KC client per (app, target FHIR server) | Accepted |
+| [0003](0003-no-default-grant-scopes.md) | No default scopes in grants files — all access must be explicit | Accepted |
