@@ -1,0 +1,19 @@
+fhir_server_key: "fhir-hospital-a-referral"
+
+# Hospital A grants access to its Referral FHIR server.
+# Both applications of Hospital B are granted access here.
+# Keys match the app filename convention: {org_id}--{app_id}.
+grants:
+  hospital-b--lis:
+    scopes:
+      - "system/Patient.r"
+      - "system/ServiceRequest.r"
+      - "system/Condition.r"
+      - "system/Task.cru"
+
+  hospital-b--pharmacy:
+    scopes:
+      - "system/Patient.r"
+      - "system/ServiceRequest.r"
+      - "system/MedicationStatement.r"
+      - "system/AllergyIntolerance.r"

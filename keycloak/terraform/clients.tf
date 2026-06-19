@@ -1,40 +1,47 @@
-# Machine-to-machine clients — YAML-driven, L2 (private_key_jwt) only.
+# Machine-to-machine clients — grant-driven, L2 (private_key_jwt) only.
 #
-# Config lives in keycloak/config/clients/<hospital>.yaml.
-# One KC client is generated per (org, app, audience) triple.
-# KC client_id convention: {org_id}--{app_id}--{server_key}
+# App identity lives in keycloak/config/apps/{org_id}--{app_id}.yaml.
+# Access rights live in keycloak/config/grants/{target_org_id}.yaml.
 #
-# Each KC client has exactly one audience (its aud: scope is assigned as a
-# default scope), so the AS enforces the audience-scope binding at the client
-# level. No optional scopes — the per-audience scope set in the YAML is the
-# complete grant.
+# One KC client is generated per grant entry (one per app × target FHIR server).
+# KC client_id convention: {org_id}--{app_id}--fhir-{target_org_id}
+#
+# A registered app with no grant entries produces no KC clients — registration
+# does not imply access anywhere.
 #
 # See audience_architecture.md for the full design rationale and D3 migration path.
 
 locals {
-  _org_files = fileset("${path.module}/../config/clients", "*.yaml")
-  _orgs = {
-    for f in local._org_files :
-    trimsuffix(f, ".yaml") => yamldecode(file("${path.module}/../config/clients/${f}"))
+  _app_files = fileset("${path.module}/../config/apps", "*.yaml")
+  apps = {
+    for f in local._app_files :
+    trimsuffix(f, ".yaml") => yamldecode(file("${path.module}/../config/apps/${f}"))
   }
 
-  # Flatten org → apps → audiences into a flat map keyed by KC client_id.
+  _grant_files = fileset("${path.module}/../config/grants", "*.yaml")
+  _grants = {
+    for f in local._grant_files :
+    trimsuffix(f, ".yaml") => yamldecode(file("${path.module}/../config/grants/${f}"))
+  }
+
+  # Flatten grants into a map keyed by KC client_id.
+  # Grant files are named after the FHIR server key (e.g. fhir-hospital-a-lab.yaml),
+  # so the map key IS the server_key — no derivation needed.
+  # App metadata is looked up from local.apps by app_key.
   m2m_clients = {
     for triple in flatten([
-      for _org_key, org in local._orgs : [
-        for app_id, app in org.apps : [
-          for server_key, aud_cfg in app.audiences : {
-            client_id     = "${org.org_id}--${app_id}--${server_key}"
-            name          = "${org.display_name} / ${app.display_name} → ${server_key}"
-            description   = "L2 M2M: ${org.display_name} ${app.display_name} calling ${server_key}"
-            jwks_url      = app.jwks_url
-            tenant        = org.tenant
-            role          = org.role
-            org_reference = org.org_reference
-            server_key    = server_key
-            scopes        = aud_cfg.scopes
-          }
-        ]
+      for server_key, grant_cfg in local._grants : [
+        for app_key, app_grant in grant_cfg.grants : {
+          client_id     = "${app_key}--${server_key}"
+          name          = "${local.apps[app_key].org_display_name} / ${local.apps[app_key].app_display_name} → ${server_key}"
+          description   = "L2 M2M: ${local.apps[app_key].org_display_name} ${local.apps[app_key].app_display_name} calling ${server_key}"
+          jwks_url      = local.apps[app_key].jwks_url
+          tenant        = local.apps[app_key].tenant
+          role          = local.apps[app_key].role
+          org_reference = local.apps[app_key].org_reference
+          server_key    = server_key
+          scopes        = app_grant.scopes
+        }
       ]
     ]) : triple.client_id => triple
   }
@@ -68,7 +75,7 @@ resource "keycloak_openid_client_default_scopes" "m2m" {
   realm_id  = keycloak_realm.umzh_connect.id
   client_id = keycloak_openid_client.m2m[each.key].id
 
-  # Audience-specific SMART scopes + the aud: scope for this client's one target.
+  # Granted SMART scopes + the aud: scope for this client's target FHIR server.
   # The aud: scope carries the audience mapper that sets aud = FHIR server URL.
   default_scopes = concat(
     each.value.scopes,
