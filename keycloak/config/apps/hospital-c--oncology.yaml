@@ -1,0 +1,19 @@
+org_id: "hospital-c"
+app_id: "oncology"
+org_display_name: "Hospital C"
+app_display_name: "Oncology System"
+org_reference: "https://fhir.hospital-c.example/fhir/Organization/HospitalC"
+role: "placer"
+tenant: "placer"
+jwks_url: "https://hospital-c.example/.well-known/jwks/oncology.json"
+
+required_scopes:
+  - "system/Patient.r"
+  - "system/Condition.r"
+
+optional_scopes:
+  - "system/Task.cru"
+  - "system/ServiceRequest.rs"
+  - "system/Procedure.r"
+  - "system/Observation.r"
+  - "system/MedicationStatement.r"
