@@ -2,12 +2,11 @@
 
 ## Project purpose
 
-Keycloak-based OAuth 2.0 Authorization Server for the UMZH Connect ecosystem,
-implementing the IG's machine-to-machine security model. Three deliverables:
+Keycloak-based OAuth 2.0 Authorization Server for the UMZH Connect ecosystem, implementing the IG's machine-to-machine security model. Three deliverables:
 
 | Folder | What | Production? |
 |--------|------|-------------|
-| `keycloak/` | Custom Keycloak image + Terraform realm config | Yes (image + config) |
+| `keycloak/` | Custom Keycloak image + Terraform realm config | Yes |
 | `token-validator/` | Mock resource server that validates tokens | No — dev/test only |
 | `bruno/` | Request collection (auth, validation, negative cases) | No |
 
@@ -15,213 +14,70 @@ Key contacts: **David Altorfer** (Trifork project lead), **Andreas Ahlm** and **
 
 ---
 
-## Domain context
+## Reference docs (ai-docs/)
 
-UMZH Connect is a standardized API ecosystem for sharing clinical data between healthcare organizations. Initial use case: cross-organizational referral workflows (orthopedic surgery, sarcoma tumor boards) between a **Placer** (referring party) and a **Fulfiller** (receiving party). Governed by a FHIR IG at `https://build.fhir.org/ig/umzhconnect/umzhconnect-ig/`.
+Read the relevant doc before making changes. The frontmatter `keywords` field is the lookup index.
 
-### FHIR basics
+| Doc | What it covers |
+|-----|----------------|
+| [ai-docs/domain.md](ai-docs/domain.md) | FHIR, SMART on FHIR, referral flow |
+| [ai-docs/realm-contract.md](ai-docs/realm-contract.md) | Realm settings, clients, mappers, sandbox parity |
+| [ai-docs/config-model.md](ai-docs/config-model.md) | YAML config model — apps, grants, fhir-servers, onboarding |
+| [ai-docs/terraform.md](ai-docs/terraform.md) | Terraform patterns and pitfalls |
+| [ai-docs/mapper.md](ai-docs/mapper.md) | FhirContextMapper — raw session notes, not AuthorizationRequestContext |
+| [ai-docs/infrastructure.md](ai-docs/infrastructure.md) | docker-compose, backchannel URL, jwks-server |
+| [ai-docs/bruno.md](ai-docs/bruno.md) | Bruno collection, L2 sandbox mode |
+| [ai-docs/token-validator.md](ai-docs/token-validator.md) | Token validator config and endpoints |
+| [ai-docs/aud-design.md](ai-docs/aud-design.md) | Audience claim design — D1 implemented, D3 migration path |
+| [ai-docs/open-gaps.md](ai-docs/open-gaps.md) | Prioritized action list |
 
-- Everything is a **Resource**: Patient, Condition, ServiceRequest, Task, Consent, etc.
-- Resources exposed via RESTful HTTP API; resources reference each other forming a graph.
-- An **Implementation Guide (IG)** constrains FHIR for a specific use case.
-- Placer hosts a FHIR server with `ServiceRequest` resources; Fulfiller hosts one with `Task` resources.
-
-### SMART on FHIR
-
-- **SMART scopes** — standardized permission language: `system/<ResourceType>.<action>` (e.g. `system/Patient.r`, `system/Task.cru`). The `system/` prefix means M2M, no user logged in.
-- **Backend Services** — instead of a client secret, clients authenticate with `private_key_jwt` signed with their private key, validated against registered JWKS. No shared secrets.
-- **fhirContext** — client declares which FHIR resource it's operating in context of; ends up as a `fhirContext` claim in the issued JWT for fine-grained RS enforcement.
-
-### The referral flow
-
-```
-Fulfiller → Keycloak:
-  POST /token
-  grant_type=client_credentials
-  scope=system/ServiceRequest.rs system/Patient.r
-  authorization_details=[{"type":"umzh-connect-context","identifier":"ServiceRequest/sr-123"}]
-  client_assertion=<JWT signed with Fulfiller's private key>
-
-Keycloak issues access token:
-  {
-    "iss": "https://auth.umzhconnect.ch",
-    "aud": "https://fhir.placer.example",    ← target FHIR server URL (see Audience gap below)
-    "scope": "system/ServiceRequest.rs system/Patient.r",
-    "extensions": { "umzhconnect": { "organization_reference": "..." } },
-    "fhirContext": [{ "reference": "ServiceRequest/sr-123" }]
-  }
-
-Fulfiller → Placer's FHIR server:
-  GET /ServiceRequest/sr-123
-  Authorization: Bearer <access token>
-
-Placer's policy engine (OPA):
-  1. Validate JWT signature and scope
-  2. Look up active Consent for ServiceRequest/sr-123 authorizing this party_id
-  3. Verify requested resource is within the reference graph of sr-123
-  → Allow or deny
-```
-
-Context enforcement uses FHIR `Consent` resources (`meaning = "related"` covers the root resource and its transitive references). Revoke by setting `Consent.status = inactive`.
-
-### The full sandbox stack (for reference)
-
-Keycloak 26.6.1, HAPI FHIR, APISIX (API gateway), OPA (fine-grained authz), nginx, PostgreSQL.
+Full architecture docs: [`audience_architecture.md`](audience_architecture.md) and [`docs/adr/`](docs/adr/).
 
 ---
 
-## Reference repos (cloned at ~/github/umzhconnect/)
+## Behavioral rules
 
-| Repo | Role |
-|------|------|
-| `umzhconnect-ig` | Normative security spec — read `input/pagecontent/security.md` and `security-implementation.md` before making auth decisions |
-| `umzhconnect-sandbox` | Running reference implementation; the Keycloak realm contract in this repo must be a drop-in replacement for the sandbox's `keycloak` service |
-| `umzhconnect-auth` | Empty skeleton — this repo is what fills it (LICENSE + README only as of 2026-06-15) |
+### Before any auth decision — read the IG security docs
 
----
+`~/github/umzhconnect/umzhconnect-ig/input/pagecontent/security.md` and `security-implementation.md` are the normative source. This repo's realm must remain a drop-in replacement for `umzhconnect-sandbox`. When in doubt, check the sandbox realm export.
 
-## Auth model (IG summary)
+### Production is L2 only — never propose L1 as production config
 
-- Pure M2M: `client_credentials` grant, no user flows, no `openid` scope.
-- **Level 1** (`client_secret`) — sandbox/PoC only.
-- **Level 2** (`private_key_jwt`, JWKS registered at onboarding) — production baseline. Level 3 (mTLS/DPoP) is out of scope.
-- RFC 9396 `authorization_details` of type `umzh-connect-context` → mapped by the custom `FhirContextMapper` into a `fhirContext` claim.
-- Every token carries `extensions.umzhconnect.organization_reference` (set by the AS from the onboarding record, never by the client).
-- SMART system scopes: `system/<Resource>.<cruds>`.
+`client_secret` is banned from production. All production clients authenticate with `private_key_jwt`. Never include L1 in production proposals, never suggest it as a migration path or fallback.
 
----
+### Terraform `extra_config` — no `attributes.` prefix
 
-## Realm contract (must stay sandbox-compatible)
+`extra_config` maps directly into Keycloak's `attributes` object. Adding `attributes.` yourself creates `attributes.attributes.foo` — silently ignored. Always use bare key names (`"jwks.url"`, not `"attributes.jwks.url"`).
 
-| Item | Value |
-|------|-------|
-| Realm | `umzh-connect` |
-| Issuer (published) | `http://localhost:8180/realms/umzh-connect` |
-| Token lifetime | 300 s |
-| L1 clients | `placer-client` / `fulfiller-client` (client-secret) |
-| L2 clients | `placer-client-l2` / `fulfiller-client-l2` (client-jwt, JWKS fetched from `jwks.url`) |
-| Roles | `placer`, `fulfiller`, `admin` |
-| Mappers per M2M client | `org-reference-mapper`, `fhir-context-mapper`, `tenant-mapper`, `realm-roles` |
+### Never touch KC clients manually — everything is Terraform-managed
 
-Known divergences from the sandbox `realm-export.json` (all intentional):
-- `registrationAllowed = false` (sandbox has `true` for web-app login).
-- `display_name = "UMZH Connect"` (sandbox says `"UMZH Connect Sandbox"`).
-- Keycloak's built-in scopes (`email`, `profile`, `roles`, etc.) are present here; the sandbox export omits them (they exist in Keycloak but weren't exported).
+All KC clients are generated from `config/apps/` + `config/grants/` YAML files. Never hand-edit the KC admin console. If a client needs to change, change the YAML and run `terraform apply`.
+
+### No default grants — all access must be explicit
+
+Every bilateral access relationship requires a deliberate entry in the target's `config/grants/{server_key}.yaml`. There are no default or inherited grants. A registered app with no grant entry has zero access. See [ADR 0003](docs/adr/0003-no-default-grant-scopes.md).
+
+### Realm changes must stay sandbox-compatible
+
+Unless the divergence is intentional and documented in [ai-docs/realm-contract.md](ai-docs/realm-contract.md), any realm change must keep the realm a valid drop-in for `umzhconnect-sandbox`. Acceptance test: the sandbox's Hurl suites in `tests/` should still pass.
 
 ---
 
-## Terraform
+## Keep ai-docs/ up to date
 
-Provider: `keycloak/keycloak ~> 5.0`.
+Update the relevant doc whenever you change the corresponding code.
 
-`extra_config` on `keycloak_openid_client` maps directly into Keycloak's
-`attributes` object — **do not add an `attributes.` prefix** to key names or
-they will be double-nested (`attributes.attributes.foo`) and silently ignored
-by Keycloak. The JWKS URL for L2 clients is set via:
+| When you change… | Update… |
+|------------------|---------|
+| `keycloak/terraform/*.tf` | [ai-docs/terraform.md](ai-docs/terraform.md) and [ai-docs/realm-contract.md](ai-docs/realm-contract.md) |
+| `keycloak/config/**` | [ai-docs/config-model.md](ai-docs/config-model.md) |
+| `keycloak/mapper/src/**` | [ai-docs/mapper.md](ai-docs/mapper.md) |
+| `docker-compose.yml` | [ai-docs/infrastructure.md](ai-docs/infrastructure.md) |
+| `token-validator/src/**` | [ai-docs/token-validator.md](ai-docs/token-validator.md) |
+| `bruno/**` | [ai-docs/bruno.md](ai-docs/bruno.md) |
+| Audience / `aud` design decisions | [ai-docs/aud-design.md](ai-docs/aud-design.md) and add an ADR under `docs/adr/` |
+| Any item in the open gaps list | [ai-docs/open-gaps.md](ai-docs/open-gaps.md) — mark resolved and move to "Resolved" |
 
-```hcl
-extra_config = {
-  "use.jwks.url" = "true"
-  "jwks.url"     = each.value.jwks_url   # sourced from config/apps/<org>--<app>.yaml
-}
-```
+Keep `keywords` in each doc's frontmatter in sync with the actual symbols and file paths after a change — stale keywords defeat the lookup purpose.
 
-Re-apply after config changes:
-```sh
-TF_VAR_keycloak_url=http://localhost:8180 \
-  terraform -chdir=keycloak/terraform apply -auto-approve
-```
-
-`docker compose up keycloak-config` does the same via the compose network.
-
----
-
-## FhirContextMapper
-
-Source: `keycloak/mapper/` (ported from umzhconnect-sandbox, Apache-2.0).
-
-Keycloak 26.x does not populate `AuthorizationRequestContext` with custom
-`authorization_details` types for the `client_credentials` flow. The mapper
-reads the raw session notes (`authorization_details` /
-`client_request_param_authorization_details`) directly. Do not attempt to use
-the standard `AuthorizationRequestContext` API for this — it only contains
-built-in SMART scope entries.
-
-The mapper is bundled into the image at build time (multi-stage Dockerfile).
-No runtime volume mount needed.
-
----
-
-## docker-compose
-
-`KC_HOSTNAME_BACKCHANNEL_DYNAMIC=true` lets in-network services (Terraform,
-token-validator) reach Keycloak at `http://keycloak:8080` while the published
-issuer stays `http://localhost:8180`. This is why `TF_VAR_keycloak_url` uses
-the backchannel URL inside compose but tokens show the frontend URL in `iss`.
-
-The `jwks-server` (nginx) serves the demo L2 client public keys and stands in
-for the sandbox's APISIX `/jwks.json` endpoints. For drop-in sandbox use,
-set `jwks_url` in the relevant `config/apps/*.yaml` files to the APISIX gateway
-JWKS endpoints instead.
-
----
-
-## Bruno
-
-The L2 pre-request scripts use Node.js built-ins (`crypto`, `fs`, `path`).
-Bruno's default sandbox is **QuickJS** — these modules do not exist there.
-
-- **CLI:** always pass `--sandbox unsafe`
-- **Desktop:** click the green shield (top-right of the collection window) → *Developer mode*
-
-All other requests (L1, validation, negative) work in either sandbox.
-
----
-
-## Token validator
-
-Environment variables: `ISSUER` (required), `JWKS_URI`, `PORT`, `EXPECTED_AUDIENCE` (optional — per the IG the token `aud` should be the target FHIR API base URL, but Keycloak's default `client_credentials` audience is the realm, so the check is reported but not enforced unless this is set).
-
-`POST /validate` returns a per-check report — useful as a correctness oracle
-when developing clients or tweaking the Terraform config. A `warn` does not
-fail the request; only `fail` does.
-
-Known inconsistency: `MAX_LIFETIME_SECONDS = 360` in `token-validator/src/validator.ts:27` but the check message says "recommended <= 300s" and the realm is 300 s. Fix constant to 300 or update the message.
-
----
-
-## Open gaps and action list
-
-From the 2026-06-16 meeting (Trifork pre-sync + call with USZ and Balgrist).
-See `docs/adr/0002-audience-claim-design.md` for the full audience claim design analysis.
-
-### Priority order
-
-1. **Fix `.env` in git** — `.env` contains `KEYCLOAK_ADMIN_PASSWORD=admin`, `PLACER_CLIENT_SECRET=placer-secret-2025`, etc. and is tracked by git. Add `.env` to `.gitignore`, create `.env.example` with placeholder values.
-2. **Gate L1 clients** — `placer-client` / `fulfiller-client` in `clients.tf` are sandbox/PoC only. Add `enable_sandbox_clients = false` Terraform variable or remove from production config.
-3. **Remove `users.tf` and `smart-*` scopes** — `keycloak/terraform/users.tf` is entirely sandbox parity: `web-app` PKCE client with ROPC (`direct_access_grants_enabled = true`) and three demo users with hardcoded passwords. The five `smart-*` scopes in `scopes.tf` are user-facing consent screen scopes, not M2M. Remove or gate behind a flag.
-4. **Add WARN logging to `FhirContextMapper`** — `FhirContextMapper.java:98` silently swallows parse errors; a client sending malformed `authorization_details` gets a token with no `fhirContext` instead of any error. Log the parse exception at WARN level.
-5. **Document onboarding runbook** — what a new app registration requires (`config/apps/` entry + grant entries from target orgs), who approves, how `terraform apply` is triggered. The grant-based YAML model is the extension point; document the two-PR workflow.
-6. **Confirm `tenant` claim with UMZH** — `tenant-mapper` adds a `tenant` claim (`placer` / `fulfiller`) to every access token. It is a sandbox routing hint, not in the IG spec. Confirm with UMZH whether to retain or drop it.
-7. **Confirm scope of placer/fulfiller distinction** — the IG defines `placer` and `fulfiller` roles for the referral workflow specifically. It is not yet confirmed whether all UMZH Connect M2M use cases follow this model (e.g. lab result retrieval, imaging sharing, and medication lookups may not map cleanly to it). If the distinction applies only to the referral workflow, the `role` claim should be scoped accordingly and apps outside that workflow should not carry it. Related to #6 — resolve together with UMZH.
-8. **Production hardening** — `ssl_required = "none"` in `realm.tf:11` (must be `external` or `all`); `start-dev` in `docker-compose.yml:38` (disables all production hardening — document clearly as dev-only).
-
-### Resolved
-
-- `authorization_details` → `fhirContext` mapping: the current implementation is correct. `FhirContextMapper` reads the raw request parameter and maps it into the AS-signed JWT. The RS reads `fhirContext` from the JWT, not the request. No design change needed.
-- L1 / L2 / L3 direction: never allow L1 in production; no upgrade path between levels (new client provisioned at the right level from day one); L3 out of scope.
-- Onboarding approach: Terraform, reproducible, VCS-based.
-- Audience model: D1 implemented — one KC client per (app, target FHIR server), grant-based YAML config (`config/apps/` + `config/grants/`). See ADR 0002.
-- `aud` claim: implemented via `aud:<server_key>` scope assigned as default scope on each KC client; `EXPECTED_AUDIENCE` enabled in token validator.
-
-### External / pending
-
-- IP/open-source agreement was pending legal review as of the meeting.
-- UMZH GitHub invites not yet done as of the meeting.
-- `umzhconnect/umzhconnect-auth` delivery target is still an empty stub.
-
----
-
-## Audience claim design summary
-
-Full analysis in [`docs/adr/0002-audience-claim-design.md`](docs/adr/0002-audience-claim-design.md). Implemented decision: **D1** — one KC client per (app, target FHIR server), grant-based YAML config. D3 (RFC 8707 `resource` parameter) tracked for future migration once KC 26.8.0+ reaches preview.
+When making a significant architectural decision (non-obvious choice, explicit deferral, reversal), add an ADR in `docs/adr/` following the format in [`docs/adr/README.md`](docs/adr/README.md).
