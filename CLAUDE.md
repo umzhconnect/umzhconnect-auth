@@ -122,7 +122,7 @@ by Keycloak. The JWKS URL for L2 clients is set via:
 ```hcl
 extra_config = {
   "use.jwks.url" = "true"
-  "jwks.url"     = var.placer_l2_jwks_url   # NOT "attributes.jwks.url"
+  "jwks.url"     = each.value.jwks_url   # sourced from config/apps/<org>--<app>.yaml
 }
 ```
 
@@ -161,8 +161,8 @@ the backchannel URL inside compose but tokens show the frontend URL in `iss`.
 
 The `jwks-server` (nginx) serves the demo L2 client public keys and stands in
 for the sandbox's APISIX `/jwks.json` endpoints. For drop-in sandbox use,
-override `TF_VAR_placer_l2_jwks_url` / `TF_VAR_fulfiller_l2_jwks_url` with the
-APISIX gateway URLs instead.
+set `jwks_url` in the relevant `config/apps/*.yaml` files to the APISIX gateway
+JWKS endpoints instead.
 
 ---
 
@@ -193,26 +193,26 @@ Known inconsistency: `MAX_LIFETIME_SECONDS = 360` in `token-validator/src/valida
 ## Open gaps and action list
 
 From the 2026-06-16 meeting (Trifork pre-sync + call with USZ and Balgrist).
-See `aud-design.md` for the full audience claim design analysis.
+See `docs/adr/0002-audience-claim-design.md` for the full audience claim design analysis.
 
 ### Priority order
 
 1. **Fix `.env` in git** — `.env` contains `KEYCLOAK_ADMIN_PASSWORD=admin`, `PLACER_CLIENT_SECRET=placer-secret-2025`, etc. and is tracked by git. Add `.env` to `.gitignore`, create `.env.example` with placeholder values.
-2. **Decide audience model** — recommendation is Design 2 (named aud scopes); confirm with UMZH that scope sets are fixed per party type (see `aud-design.md` §7). This is the only outstanding question before implementing.
-3. **Implement `aud` claim** — once #2 is decided: add `var.fhir_servers` to `variables.tf`, add `keycloak_openid_client_scope` + `keycloak_openid_audience_protocol_mapper` per FHIR server, assign `aud:*` optional scopes to M2M clients, enable `EXPECTED_AUDIENCE` in `docker-compose.yml`.
-4. **Gate L1 clients** — `placer-client` / `fulfiller-client` in `clients.tf` are sandbox/PoC only. Add `enable_sandbox_clients = false` Terraform variable or remove from production config.
-5. **Remove `users.tf` and `smart-*` scopes** — `keycloak/terraform/users.tf` is entirely sandbox parity: `web-app` PKCE client with ROPC (`direct_access_grants_enabled = true`) and three demo users with hardcoded passwords. The five `smart-*` scopes in `scopes.tf` are user-facing consent screen scopes, not M2M. Remove or gate behind a flag.
-6. **Remove localhost `org_reference` defaults** — `variables.tf:61,67` default to `http://localhost:8084/fhir/Organization/HospitalP` / `…/HospitalF`. These get embedded verbatim in every issued token. Remove defaults to force operators to supply real registry URLs.
-7. **Add WARN logging to `FhirContextMapper`** — `FhirContextMapper.java:98` silently swallows parse errors; a client sending malformed `authorization_details` gets a token with no `fhirContext` instead of any error. Log the parse exception at WARN level.
-8. **Document onboarding runbook** — what variables a new client requires, what access is needed, who approves. The `m2m_clients` map in `clients.tf` is the natural extension point; Terraform needs to be fully parameterized (no hardcoded localhost defaults) before it can be handed to a non-engineer.
-9. **Confirm `tenant` claim with UMZH** — `tenant-mapper` at `clients.tf:193` adds a `tenant` claim (`placer` / `fulfiller`) to every access token. It is a sandbox routing hint, not in the IG spec. Confirm with UMZH whether to retain or drop it.
-10. **Production hardening** — `ssl_required = "none"` in `realm.tf:11` (must be `external` or `all`); `start-dev` in `docker-compose.yml:38` (disables all production hardening — document clearly as dev-only).
+2. **Gate L1 clients** — `placer-client` / `fulfiller-client` in `clients.tf` are sandbox/PoC only. Add `enable_sandbox_clients = false` Terraform variable or remove from production config.
+3. **Remove `users.tf` and `smart-*` scopes** — `keycloak/terraform/users.tf` is entirely sandbox parity: `web-app` PKCE client with ROPC (`direct_access_grants_enabled = true`) and three demo users with hardcoded passwords. The five `smart-*` scopes in `scopes.tf` are user-facing consent screen scopes, not M2M. Remove or gate behind a flag.
+4. **Add WARN logging to `FhirContextMapper`** — `FhirContextMapper.java:98` silently swallows parse errors; a client sending malformed `authorization_details` gets a token with no `fhirContext` instead of any error. Log the parse exception at WARN level.
+5. **Document onboarding runbook** — what a new app registration requires (`config/apps/` entry + grant entries from target orgs), who approves, how `terraform apply` is triggered. The grant-based YAML model is the extension point; document the two-PR workflow.
+6. **Confirm `tenant` claim with UMZH** — `tenant-mapper` adds a `tenant` claim (`placer` / `fulfiller`) to every access token. It is a sandbox routing hint, not in the IG spec. Confirm with UMZH whether to retain or drop it.
+7. **Confirm scope of placer/fulfiller distinction** — the IG defines `placer` and `fulfiller` roles for the referral workflow specifically. It is not yet confirmed whether all UMZH Connect M2M use cases follow this model (e.g. lab result retrieval, imaging sharing, and medication lookups may not map cleanly to it). If the distinction applies only to the referral workflow, the `role` claim should be scoped accordingly and apps outside that workflow should not carry it. Related to #6 — resolve together with UMZH.
+8. **Production hardening** — `ssl_required = "none"` in `realm.tf:11` (must be `external` or `all`); `start-dev` in `docker-compose.yml:38` (disables all production hardening — document clearly as dev-only).
 
-### Resolved at meeting
+### Resolved
 
 - `authorization_details` → `fhirContext` mapping: the current implementation is correct. `FhirContextMapper` reads the raw request parameter and maps it into the AS-signed JWT. The RS reads `fhirContext` from the JWT, not the request. No design change needed.
 - L1 / L2 / L3 direction: never allow L1 in production; no upgrade path between levels (new client provisioned at the right level from day one); L3 out of scope.
 - Onboarding approach: Terraform, reproducible, VCS-based.
+- Audience model: D1 implemented — one KC client per (app, target FHIR server), grant-based YAML config (`config/apps/` + `config/grants/`). See ADR 0002.
+- `aud` claim: implemented via `aud:<server_key>` scope assigned as default scope on each KC client; `EXPECTED_AUDIENCE` enabled in token validator.
 
 ### External / pending
 
@@ -224,14 +224,4 @@ See `aud-design.md` for the full audience claim design analysis.
 
 ## Audience claim design summary
 
-Full analysis in `aud-design.md`. TL;DR:
-
-| | D1: per-pair client | D2: named aud scopes ✅ | D3: RFC 8707 `resource` |
-|---|---|---|---|
-| Feasible with KC 26.6.1 | ✅ | ✅ | ❌ (milestoned for KC 26.8.0, experimental) |
-| Client count at N orgs | O(N²) | O(N) | O(N) |
-| Per-audience scope control | ✅ natural | ⚠️ per-client tuning or D1 exception | ✅ native (when available) |
-
-**Implement D2 now. Track RFC 8707 (`resource` param) for future migration — low-effort swap when KC 26.8.0 ships.**
-
-One open question (§7 of `aud-design.md`): confirm with UMZH that scope sets are fixed per party type. If they are, D2 is a clean fit. If a future requirement needs per-target scope variation, apply D1 selectively for those bilateral pairs on top of D2.
+Full analysis in [`docs/adr/0002-audience-claim-design.md`](docs/adr/0002-audience-claim-design.md). Implemented decision: **D1** — one KC client per (app, target FHIR server), grant-based YAML config. D3 (RFC 8707 `resource` parameter) tracked for future migration once KC 26.8.0+ reaches preview.

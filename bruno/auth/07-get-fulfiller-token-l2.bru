@@ -12,7 +12,7 @@ post {
 
 body:form-urlencoded {
   grant_type: client_credentials
-  client_id: {{fulfillerL2ClientId}}
+  client_id: {{fulfillerClientId}}
   client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
   client_assertion: {{fulfillerClientAssertion}}
   scope: system/Task.cru system/ServiceRequest.r system/Patient.r
@@ -36,10 +36,11 @@ script:pre-request {
   const now = Math.floor(Date.now() / 1000);
   const tokenEndpoint = `${bru.getEnvVar("keycloakUrl")}/realms/${bru.getEnvVar("realm")}/protocol/openid-connect/token`;
 
+  const clientId = bru.getEnvVar("fulfillerClientId");
   const header = { alg: "RS256", typ: "JWT", kid: "fulfiller-l2" };
   const payload = {
-    iss: bru.getEnvVar("fulfillerL2ClientId"),
-    sub: bru.getEnvVar("fulfillerL2ClientId"),
+    iss: clientId,
+    sub: clientId,
     aud: tokenEndpoint,
     exp: now + 60,
     jti: crypto.randomUUID(),

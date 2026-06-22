@@ -11,13 +11,13 @@ get {
 }
 
 auth:bearer {
-  token: {{placerToken}}
+  token: {{placerL2Token}}
 }
 
 docs {
   The placer client is not granted system/Organization.r (only the fulfiller
-  is, mirroring the sandbox realm), so this read must be rejected with 403.
-  Run auth/03 first to obtain placerToken.
+  is), so this read must be rejected with 403.
+  Run auth/06 first to obtain placerL2Token.
 }
 
 assert {

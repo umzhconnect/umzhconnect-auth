@@ -1,0 +1,18 @@
+org_id: "hospital-a"
+app_id: "his"
+org_display_name: "Hospital A"
+app_display_name: "Hospital Information System"
+org_reference: "https://fhir.hospital-a.example/fhir/Organization/HospitalA"
+role: "placer"
+tenant: "placer"
+jwks_url: "https://hospital-a.example/.well-known/jwks/his.json"
+
+required_scopes:
+  - "system/Patient.r"
+
+optional_scopes:
+  - "system/ServiceRequest.rs"
+  - "system/Task.cru"
+  - "system/Condition.r"
+  - "system/Practitioner.r"
+  - "system/Organization.r"

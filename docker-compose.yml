@@ -78,19 +78,14 @@ services:
   keycloak-config:
     image: hashicorp/terraform:1.9
     container_name: umzh-auth-keycloak-config
-    working_dir: /workspace
+    # Mount the whole keycloak/ directory so Terraform can read ../config/.
+    working_dir: /workspace/terraform
     volumes:
-      - ./keycloak/terraform:/workspace
+      - ./keycloak:/workspace
     environment:
       TF_VAR_keycloak_url: http://keycloak:8080
       TF_VAR_keycloak_admin_username: ${KEYCLOAK_ADMIN}
       TF_VAR_keycloak_admin_password: ${KEYCLOAK_ADMIN_PASSWORD}
-      TF_VAR_placer_client_secret: ${PLACER_CLIENT_SECRET}
-      TF_VAR_fulfiller_client_secret: ${FULFILLER_CLIENT_SECRET}
-      # Level-2 client JWKS, fetched by Keycloak over the compose network.
-      # For the sandbox drop-in these become the APISIX gateway URLs instead.
-      TF_VAR_placer_l2_jwks_url: http://jwks-server/placer-l2.jwks.json
-      TF_VAR_fulfiller_l2_jwks_url: http://jwks-server/fulfiller-l2.jwks.json
     entrypoint:
       [
         'sh',

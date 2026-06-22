@@ -1,0 +1,12 @@
+fhir_server_key: "fhir-hospital-a-lab"
+
+# Hospital A grants access to its Lab FHIR server.
+# Only Hospital B's LIS is granted access — the pharmacy system has no
+# clinical need for raw lab data and is intentionally excluded.
+grants:
+  hospital-b--lis:
+    scopes:
+      - "system/Patient.r"
+      - "system/ServiceRequest.r"
+      - "system/Observation.r"
+      - "system/DiagnosticReport.r"
