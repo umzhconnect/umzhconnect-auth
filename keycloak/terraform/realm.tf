@@ -15,18 +15,6 @@ resource "keycloak_realm" "umzh_connect" {
   sso_session_max_lifespan = "10h0m0s"
 }
 
-resource "keycloak_role" "placer" {
-  realm_id    = keycloak_realm.umzh_connect.id
-  name        = "placer"
-  description = "Placer/Referrer role - can create service requests and tasks"
-}
-
-resource "keycloak_role" "fulfiller" {
-  realm_id    = keycloak_realm.umzh_connect.id
-  name        = "fulfiller"
-  description = "Fulfiller/Performer role - can process tasks and fetch resources"
-}
-
 resource "keycloak_role" "admin" {
   realm_id    = keycloak_realm.umzh_connect.id
   name        = "admin"
