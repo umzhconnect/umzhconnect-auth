@@ -121,9 +121,9 @@ services:
       ISSUER: http://localhost:${KEYCLOAK_PORT}/realms/umzh-connect
       # Signature keys are fetched over the compose network (backchannel)
       JWKS_URI: http://keycloak:8080/realms/umzh-connect/protocol/openid-connect/certs
-      # Per IG the token `aud` must be the target FHIR server base URL.
-      # Keycloak's default client_credentials audience differs, so the check
-      # is reported but only enforced when EXPECTED_AUDIENCE is set.
+      # Audience enforcement is deferred (ADR 0003): tokens carry aud = client_id,
+      # not a FHIR server URL. Do not set EXPECTED_AUDIENCE until per-server
+      # audience binding is reintroduced alongside the Policy Server.
       # EXPECTED_AUDIENCE: http://localhost:8086/fhir
     ports:
       - '${VALIDATOR_PORT}:8086'
