@@ -1,0 +1,4 @@
+org_id: "hospital-a"
+org_display_name: "Hospital A"
+org_reference: "https://fhir.hospital-a.example/fhir/Organization/HospitalA"
+jwks_url: "https://hospital-a.example/.well-known/jwks.json"
