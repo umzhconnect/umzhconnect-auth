@@ -22,16 +22,16 @@ Read the relevant doc before making changes. The frontmatter `keywords` field is
 |-----|----------------|
 | [ai-docs/domain.md](ai-docs/domain.md) | FHIR, SMART on FHIR, referral flow |
 | [ai-docs/realm-contract.md](ai-docs/realm-contract.md) | Realm settings, clients, mappers, sandbox parity |
-| [ai-docs/config-model.md](ai-docs/config-model.md) | YAML config model — apps, grants, fhir-servers, onboarding |
+| [ai-docs/config-model.md](ai-docs/config-model.md) | YAML config model — hospitals, onboarding |
 | [ai-docs/terraform.md](ai-docs/terraform.md) | Terraform patterns and pitfalls |
 | [ai-docs/mapper.md](ai-docs/mapper.md) | FhirContextMapper — raw session notes, not AuthorizationRequestContext |
 | [ai-docs/infrastructure.md](ai-docs/infrastructure.md) | docker-compose, backchannel URL, jwks-server |
 | [ai-docs/bruno.md](ai-docs/bruno.md) | Bruno collection, L2 sandbox mode |
 | [ai-docs/token-validator.md](ai-docs/token-validator.md) | Token validator config and endpoints |
-| [ai-docs/aud-design.md](ai-docs/aud-design.md) | Audience claim design — D1 implemented, D3 migration path |
+| [ai-docs/aud-design.md](ai-docs/aud-design.md) | Audience claim design — current state deferred, D3 migration path |
 | [ai-docs/open-gaps.md](ai-docs/open-gaps.md) | Prioritized action list |
 
-Full architecture docs: [`audience_architecture.md`](audience_architecture.md) and [`docs/adr/`](docs/adr/).
+Architecture decisions: [`docs/adr/`](docs/adr/).
 
 ---
 
@@ -51,11 +51,11 @@ Full architecture docs: [`audience_architecture.md`](audience_architecture.md) a
 
 ### Never touch KC clients manually — everything is Terraform-managed
 
-All KC clients are generated from `config/apps/` + `config/grants/` YAML files. Never hand-edit the KC admin console. If a client needs to change, change the YAML and run `terraform apply`.
+All KC clients are generated from `config/hospitals/*.yaml` files. Never hand-edit the KC admin console. If a client needs to change, change the YAML and run `terraform apply`.
 
-### No default grants — all access must be explicit
+### No implicit access — hospitals must be explicitly onboarded
 
-Every bilateral access relationship requires a deliberate entry in the target's `config/grants/{server_key}.yaml`. There are no default or inherited grants. A registered app with no grant entry has zero access. See [ADR 0003](docs/adr/0003-no-default-grant-scopes.md).
+A hospital with no `config/hospitals/{org_id}.yaml` file has no KC client and cannot obtain tokens. Adding a hospital is a deliberate provisioning step. See [ADR 0002](docs/adr/0002-one-client-per-hospital.md).
 
 ### Realm changes must stay sandbox-compatible
 

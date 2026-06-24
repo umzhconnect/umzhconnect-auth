@@ -1,45 +1,48 @@
 ---
-recap: "Audience claim design — D1 (one KC client per app+target) is implemented; D2 was ruled out; D3 (RFC 8707) is the tracked future migration."
-keywords: [aud claim, Design 1, Design 2, Design 3, RFC 8707, resource parameter, audiences.tf, fhir-servers.yaml, aud:fhir-hospital-a-referral, include_in_token_scope, keycloak/keycloak#47117, keycloak/keycloak#47118, per-audience scope enforcement, D1-via-YAML, KC client per app target, D2 ruled out, ADR 0002]
+recap: "Audience claim design — current state defers aud binding and scope enforcement to FHIR servers; D3 (RFC 8707) is the tracked future path."
+keywords: [aud claim, audience, ADR 0002, ADR 0003, RFC 8707, resource parameter, keycloak/keycloak#47117, keycloak/keycloak#47118, D1-via-YAML, one client per hospital, scope enforcement, FHIR server, policy server, D3]
 ---
 
 # Audience (`aud`) claim design
 
-**Status:** D1-via-YAML implemented. D3 migration path documented.  
-Full rationale: [`docs/adr/0002-audience-claim-design.md`](../docs/adr/0002-audience-claim-design.md)  
-Architecture detail: [`audience_architecture.md`](../audience_architecture.md)
+**Status:** Audience enforcement deferred — see ADR 0002 and ADR 0003.  
+Full rationale: [`docs/adr/0002-one-client-per-hospital.md`](../docs/adr/0002-one-client-per-hospital.md) and [`docs/adr/0003-defer-scope-and-audience-enforcement.md`](../docs/adr/0003-defer-scope-and-audience-enforcement.md)
 
 ---
 
-## Implemented: D1-via-YAML
+## Current implementation
 
-One Keycloak client per (org, app, target FHIR server), generated from YAML config. Each client has exactly one `aud:<server_key>` scope assigned as a **default scope** — the audience mapper sets `aud` = the FHIR server URL without the client needing to request it.
+One Keycloak client per hospital (org), identified by `{org_id}`. A hospital with no `config/hospitals/{org_id}.yaml` has no KC client and cannot obtain tokens.
 
-`include_in_token_scope = false` on the scope suppresses `aud:fhir-hospital-a-referral` from the `scope` claim — the audience mapper fires independently, so the token has the correct `aud` but no noise in `scope`.
+`aud` in issued tokens defaults to the KC client ID (standard Keycloak `client_credentials` behaviour). No per-FHIR-server audience scope is configured. Scopes are not enforced at the AS level — FHIR servers handle their own authorization.
 
-Scope enforcement is at the AS level: the granted SMART scopes are fixed at provisioning time per (app, target FHIR server) pair. Different targets can have different scope sets for the same calling app.
-
----
-
-## Why D2 was ruled out
-
-D2 (named aud scopes, one client per app) was the initial recommendation but was rejected when per-audience scope enforcement became a requirement. In D2, the AS grants any scope the client holds regardless of which `aud:` scope is requested — there is no mechanism to enforce different scope sets per target FHIR server without separate KC clients. D1 gives this naturally.
+A token issued to `hospital-a` is not bound to a specific FHIR server URL; any FHIR server in the realm will accept it. This risk is accepted explicitly — FHIR servers mitigate it through their own access control. See ADR 0003.
 
 ---
 
-## Why D3 is not available yet
+## Why audience enforcement was deferred
 
-RFC 8707 `resource` parameter support in Keycloak is tracked as [keycloak/keycloak#47117](https://github.com/keycloak/keycloak/issues/47117) (experimental) and [#47118](https://github.com/keycloak/keycloak/issues/47118) (preview). Not available in KC 26.6.1. Milestoned for KC 26.8.0 as experimental — no stable release date.
+USZ and Balgrist (UMZH) confirmed in the 2026-06-23 meeting that AS-level scope and audience enforcement is premature before FHIR server authorization behaviour is settled. Authorization will move to a Policy Server, and that is the right moment to introduce AS-level enforcement.
 
 ---
 
-## D3 migration path (when available)
+## Prior design (D1-via-YAML) — superseded
 
-| | D1-via-YAML (now) | D3 (future) |
+Before 2026-06-23, the design was one KC client per (org, app, target FHIR server) with per-server scope grants and `aud:<server_key>` default scopes. This was replaced by ADR 0002 when UMZH confirmed that this granularity is not needed at this stage. The per-server grants model is preserved in the git history on the pre-ADR-0002 commit.
+
+---
+
+## D3 migration path (RFC 8707 resource indicators)
+
+When RFC 8707 support reaches preview in Keycloak (tracked as [keycloak/keycloak#47117](https://github.com/keycloak/keycloak/issues/47117) — milestoned for KC 26.8.0 as experimental):
+
+| | Current (one client per hospital) | D3 (future) |
 |---|---|---|
-| KC clients | 1 per (app, FHIR server) | 1 per app |
-| `config/apps/` | unchanged | unchanged |
-| `config/grants/` | drives client generation | becomes per-client resource allow-list |
-| Token request | `client_id=hospital-b--lis--fhir-hospital-a-referral` | `client_id=hospital-b--lis resource=https://...` |
+| KC clients | 1 per hospital | 1 per hospital (unchanged) |
+| Token request | `client_id=hospital-a` | `client_id=hospital-a resource=https://fhir.hospital-b.example/fhir` |
+| `aud` in token | KC client ID | FHIR server URL from `resource` param |
+| Scope enforcement | None at AS | Per (caller, target) at AS |
+| `config/hospitals/*.yaml` | unchanged | unchanged |
+| Terraform change | — | Add per-client resource allow-list |
 
-Migration is low-effort when D3 reaches preview: the YAML config stays the same, the fan-out loop in `clients.tf` is replaced, and clients switch token request parameters.
+The YAML config stays the same. The main Terraform change is adding a resource allow-list per client; FHIR server URLs come from a new registry (equivalent of the old `fhir-servers.yaml`).
