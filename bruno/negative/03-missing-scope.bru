@@ -15,8 +15,9 @@ auth:bearer {
 }
 
 docs {
-  The placer client is not granted system/Organization.r (only the fulfiller
-  is), so this read must be rejected with 403.
+  hospital-a's token does not include system/Organization.r (only hospital-b
+  does in the token validator's scope checks), so this read must be rejected
+  with 403.
   Run auth/06 first to obtain placerL2Token.
 }
 
