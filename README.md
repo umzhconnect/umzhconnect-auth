@@ -58,16 +58,14 @@ docker compose up keycloak-config
 ### Smoke test
 
 ```sh
-# L1 token
-curl -s http://localhost:8180/realms/umzh-connect/protocol/openid-connect/token \
-  -d grant_type=client_credentials \
-  -d client_id=placer-client -d client_secret=placer-secret-2025 \
-  -d 'scope=system/Task.cru system/Patient.r'
+# Discovery (no auth required)
+curl -s http://localhost:8180/realms/umzh-connect/.well-known/openid-configuration | jq .issuer
 
-# Validate it
-curl -s http://localhost:8086/validate -H 'Content-Type: application/json' \
-  -d "{\"token\": \"<access_token>\"}" | jq
+# Token validator health
+curl -s http://localhost:8086/healthz
 ```
+
+All production clients authenticate with `private_key_jwt` (L2). Use the Bruno collection for full token acquisition and validation flows — see [Bruno collection](#bruno-collection) below.
 
 ## Bruno collection
 
@@ -122,22 +120,17 @@ To swap this Keycloak into `umzhconnect-sandbox`:
    with this repo's `keycloak/` build (it already contains the mapper — the
    sandbox's `keycloak-mapper-build` service and the `--import-realm` flag and
    realm/provider volume mounts become unnecessary).
-2. Apply the Terraform config against it with the sandbox values:
+2. Update `keycloak/config/hospitals/*.yaml` with the sandbox JWKS endpoint
+   URLs (e.g. `jwks_url: "http://apisix-placer-external:9080/jwks.json"`),
+   then apply:
    ```sh
-   TF_VAR_placer_l2_jwks_url=http://apisix-placer-external:9080/jwks.json \
-   TF_VAR_fulfiller_l2_jwks_url=http://apisix-fulfiller-external:9080/jwks.json \
-   terraform apply
+   TF_VAR_keycloak_url=http://localhost:8180 \
+     terraform -chdir=keycloak/terraform apply -auto-approve
    ```
-3. Everything else (realm name, issuer `http://localhost:8180/realms/umzh-connect`,
-   client IDs/secrets, scopes, roles, claims) matches the sandbox realm export,
-   so APISIX/OPA and the web app keep working. Acceptance test: run the
-   sandbox's Hurl suites (`tests/`).
+3. The realm name, issuer URL (`http://localhost:8180/realms/umzh-connect`),
+   SMART scope vocabulary, and custom claims match the sandbox realm export.
+   Acceptance test: run the sandbox's Hurl suites (`tests/`).
 
-## Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `scripts/validate-grants.py` | Validates `config/apps/` against `config/grants/`: every app key referenced in a grants file must have a matching app config, and every `required_scope` declared by an app must be covered by each grant targeting it. Run before `terraform apply` after any config change. Requires `pyyaml` (`pip install pyyaml`). |
 
 ## Architecture decisions
 

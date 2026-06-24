@@ -20,5 +20,5 @@ output "jwks_endpoint" {
 
 output "m2m_client_ids" {
   description = "Registered machine-to-machine client IDs."
-  value       = keys(local.m2m_clients)
+  value       = keys(local.hospitals)
 }
