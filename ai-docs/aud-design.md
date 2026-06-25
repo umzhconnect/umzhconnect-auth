@@ -76,6 +76,12 @@ command: start-dev --features=resource-indicators
 
 ---
 
+## D2 as an alternative
+
+D2 (named `aud:` scopes, one client per hospital) is now technically feasible — the original veto was per-audience scope enforcement, which was dropped in ADR 0002/0003. Full trade-off analysis: [aud-d2-analysis.md](aud-d2-analysis.md).
+
+---
+
 ## Prior design — superseded
 
 ### D1-via-YAML (before ADR 0002)
