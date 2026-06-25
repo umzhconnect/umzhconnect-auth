@@ -1,98 +1,89 @@
 ---
-recap: "YAML-driven config model — apps, grants, and fhir-servers YAML files that drive KC client generation via Terraform."
-keywords: [config/apps, config/grants, config/fhir-servers.yaml, app_id, org_id, server_key, jwks_url, required_scopes, optional_scopes, fhir_server_key, grants, KC client naming, double-dash separator, validate-grants.py, onboarding, two-PR workflow, no default grants, ADR 0002, ADR 0003]
+recap: "YAML-driven config model — hospitals and scopes YAML files that drive KC client generation via Terraform."
+keywords: [config/hospitals, config/scopes.yaml, org_id, fhir_url, allowed_targets, jwks_url, org_reference, default_scopes, optional_scopes, scopes.tf, clients.tf, resource_url, fhir-server client, audience mapper, onboarding, terraform apply, ADR 0002, ADR 0004]
 ---
 
 # Config model
 
 All KC clients are generated from YAML files. No HCL changes are needed to add or revoke access — only YAML + `terraform apply`.
 
-Full architecture: [`audience_architecture.md`](../audience_architecture.md).
-
 ## Directory layout
 
 ```
 keycloak/config/
-  fhir-servers.yaml          # network FHIR server registry (server key → URL)
-  apps/
-    {org_id}--{app_id}.yaml  # one file per application — identity + declared scopes
-  grants/
-    {server_key}.yaml        # one file per FHIR server — access rights granted per caller
+  scopes.yaml              # all custom client scopes for the realm
+  hospitals/
+    {org_id}.yaml          # one file per onboarded hospital
 ```
 
-## `fhir-servers.yaml`
+---
 
-Each key becomes a Keycloak client scope named `aud:<key>`. Terraform reads this in `audiences.tf`. Adding a new FHIR server = one new entry + `terraform apply`.
+## `config/hospitals/{org_id}.yaml`
+
+Identity, authentication, and audience config for one hospital. A hospital with no file here has no KC client and cannot obtain tokens.
 
 ```yaml
-servers:
-  fhir-hospital-a-referral:
-    url: "https://referral.hospital-a.example/fhir"
-    description: "Hospital A — Referral FHIR server"
+org_id: "hospital-a"
+org_display_name: "Hospital A"
+org_reference: "https://fhir.hospital-a.example/fhir/Organization/HospitalA"
+fhir_url: "https://fhir.hospital-a.example/fhir"
+jwks_url: "https://hospital-a.example/.well-known/jwks.json"
+allowed_targets:
+  - "hospital-b"
+  - "hospital-c"
 ```
 
-## `config/apps/{org_id}--{app_id}.yaml`
+| Field | Purpose |
+|-------|---------|
+| `org_id` | KC client ID (must match filename stem) |
+| `org_display_name` | Human label shown in KC admin |
+| `org_reference` | `Organization` FHIR reference — embedded in every token as `extensions.umzhconnect.organization_reference` |
+| `fhir_url` | Base URL of this hospital's FHIR server, registered as `resource_url` on the companion `{org_id}-fhir-server` KC client (RFC 8707) |
+| `jwks_url` | Public JWKS endpoint KC uses to verify `private_key_jwt` assertions |
+| `allowed_targets` | Other hospital `org_id` values this client may mint audience-bound tokens for; omitted → no cross-hospital token flow |
 
-Identity and authentication config for a calling application. Contains no audience or scope grants.
+Terraform creates two KC clients per file:
+1. `{org_id}` — the M2M client (L2 `private_key_jwt`, service account enabled)
+2. `{org_id}-fhir-server` — a no-flow resource-server registration that carries `resource_url = fhir_url` for RFC 8707 matching
+
+`allowed_targets` drives the cross-hospital audience mapper cross-product (`clients.tf:audience_pairs`). Adding `hospital-b` here creates an `oidc-audience-mapper` on `{org_id}` that includes `hospital-b-fhir-server` in the token `aud` when `resource=<hospital-b fhir_url>` is sent.
+
+---
+
+## `config/scopes.yaml`
+
+All custom SMART Backend Services client scopes for the realm. Terraform reads this in `scopes.tf` to create scopes and assign defaults to every hospital M2M client.
 
 ```yaml
-org_id: "hospital-b"
-app_id: "lis"
-org_display_name: "Hospital B"
-app_display_name: "Laboratory Information System"
-org_reference: "https://fhir.hospital-b.example/fhir/Organization/HospitalB"
-role: "fulfiller"
-tenant: "fulfiller"
-jwks_url: "https://hospital-b.example/.well-known/jwks/lis.json"
-required_scopes:
-  - "system/Patient.r"
+default_scopes:
+  - name: "system/Task.cru"
+    description: "SMART system scope: create/read/update Tasks"
+  # ... (see the file for the full list)
+
 optional_scopes:
-  - "system/Observation.r"
-  - "system/Task.cru"
+  - name: "smart-task-write"
+    description: "SMART on FHIR: Create/update tasks"
+  # ...
 ```
 
-`required_scopes` and `optional_scopes` are for documentation and `validate-grants.py` validation only — Terraform does not read them. Nothing in this file is secret; `jwks_url` is a public HTTPS endpoint.
+`default_scopes` are always present in issued tokens. `optional_scopes` are registered in KC so callers may request them explicitly via the `scope` parameter; they are not sent unless requested.
 
-## `config/grants/{server_key}.yaml`
+To add a scope: add an entry to `config/scopes.yaml` and run `terraform apply`. To remove one: remove the entry — Terraform will destroy the scope and its client assignments.
 
-Owned by the org operating that FHIR server. Drives KC client generation — an app not listed here gets no KC client for this server and therefore no access.
+---
 
-```yaml
-fhir_server_key: "fhir-hospital-a-referral"
+## Onboarding a hospital
 
-grants:
-  hospital-b--lis:             # {org_id}--{app_id} — matches app filename
-    scopes:
-      - "system/Patient.r"
-      - "system/ServiceRequest.r"
-      - "system/Task.cru"
-```
+1. Create `config/hospitals/{org_id}.yaml` with `fhir_url` and `allowed_targets`.
+2. Add entries to `allowed_targets` in the source hospitals that should be able to target this one.
+3. Run `terraform apply`.
 
-No default grants — every entry is explicit. See [ADR 0003](../docs/adr/0003-no-default-grant-scopes.md).
+The target hospital's `{org_id}-fhir-server` client must exist before KC can resolve audience mappers pointing to it, so onboard both sides before testing cross-hospital flows.
 
-## KC client naming
-
-`{org_id}--{app_id}--{server_key}` — double-dash separator is unambiguous (org/app IDs use single dashes; KC client IDs allow `--`).
-
-Example: `hospital-b--lis--fhir-hospital-a-referral`
-
-## Onboarding a new application
-
-1. Calling org adds `config/apps/{org_id}--{app_id}.yaml`.
-2. Each target org that wants to grant access adds an entry to `config/grants/{server_key}.yaml`.
-3. Run `scripts/validate-grants.py` to confirm required scopes are covered.
-4. `terraform apply`.
-
-PR diff: one app file + one or more grant files. No HCL changes needed.
-
-## Onboarding a new FHIR server
-
-Add one entry to `config/fhir-servers.yaml`, create `config/grants/{server_key}.yaml`, then `terraform apply`.
+---
 
 ## Revoking access
 
-Remove the app's entry from the target's `config/grants/{server_key}.yaml` and run `terraform apply`. The KC client is destroyed.
+To block a hospital from minting tokens for a target: remove the target from its `allowed_targets` list and run `terraform apply`. The audience mapper is destroyed; the hospital can no longer include that target's FHIR server in `aud`.
 
-## validate-grants.py
-
-`scripts/validate-grants.py` checks that every grant's scope set covers the app's `required_scopes` and that all referenced app keys exist in `config/apps/`. Run before `terraform apply` when changing grants.
+To decommission a hospital entirely: delete its `{org_id}.yaml` and remove it from all other hospitals' `allowed_targets`. Run `terraform apply`.

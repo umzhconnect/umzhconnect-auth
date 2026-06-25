@@ -35,7 +35,7 @@ services:
     container_name: umzh-auth-keycloak
     # start-dev keeps local iteration simple (http, no strict hostname checks).
     # The production snapshot will run `start --optimized` from the same image.
-    command: start-dev
+    command: start-dev --features=resource-indicators
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
@@ -121,10 +121,10 @@ services:
       ISSUER: http://localhost:${KEYCLOAK_PORT}/realms/umzh-connect
       # Signature keys are fetched over the compose network (backchannel)
       JWKS_URI: http://keycloak:8080/realms/umzh-connect/protocol/openid-connect/certs
-      # Audience enforcement is deferred (ADR 0003): tokens carry aud = client_id,
-      # not a FHIR server URL. Do not set EXPECTED_AUDIENCE until per-server
-      # audience binding is reintroduced alongside the Policy Server.
-      # EXPECTED_AUDIENCE: http://localhost:8086/fhir
+      # RFC 8707 (ADR 0004): when resource= is supplied, aud = {org_id}-fhir-server.
+      # Set EXPECTED_AUDIENCE to the fhir_url of this validator's host hospital
+      # once a real FHIR server URL is known; leave unset for the demo stack.
+      # EXPECTED_AUDIENCE: https://fhir.hospital-a.example/fhir
     ports:
       - '${VALIDATOR_PORT}:8086'
     depends_on:

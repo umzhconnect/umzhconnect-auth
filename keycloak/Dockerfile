@@ -22,7 +22,7 @@ FROM quay.io/keycloak/keycloak:26.6.1 AS builder
 COPY --from=mapper-build /build/target/umzh-fhir-context-mapper-*.jar /opt/keycloak/providers/
 ENV KC_DB=postgres \
     KC_HEALTH_ENABLED=true
-RUN /opt/keycloak/bin/kc.sh build
+RUN /opt/keycloak/bin/kc.sh build --features=resource-indicators
 
 # ---- Final image -------------------------------------------------------------
 FROM quay.io/keycloak/keycloak:26.6.1

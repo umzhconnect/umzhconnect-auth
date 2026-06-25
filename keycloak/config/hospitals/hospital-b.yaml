@@ -1,4 +1,8 @@
 org_id: "hospital-b"
 org_display_name: "Hospital B"
 org_reference: "https://fhir.hospital-b.example/fhir/Organization/HospitalB"
+fhir_url: "https://fhir.hospital-b.example/fhir"
 jwks_url: "http://jwks-server/fulfiller-l2.jwks.json"
+allowed_targets:
+  - "hospital-a"
+  - "hospital-c"

@@ -1,6 +1,6 @@
 ---
-recap: "Keycloak realm settings that must stay sandbox-compatible — fixed settings, how clients are generated, mappers, roles, and documented divergences."
-keywords: [umzh-connect realm, issuer, token lifetime, placer-client, fulfiller-client, L1 banned, L2, client-jwt, private_key_jwt, org-reference-mapper, fhir-context-mapper, tenant-mapper, realm-roles, roles, placer, fulfiller, admin, sandbox parity, registrationAllowed, display_name, built-in scopes, ssl_required, start-dev, users.tf, smart scopes, direct_access_grants_enabled]
+recap: "Keycloak realm settings that must stay sandbox-compatible — fixed settings, how clients are generated, mappers, scopes, roles, and documented divergences."
+keywords: [umzh-connect realm, issuer, token lifetime, L1 banned, L2, client-jwt, private_key_jwt, org-reference-mapper, fhir-context-mapper, realm-roles, roles, admin, sandbox parity, registrationAllowed, display_name, ssl_required, start-dev, smart scopes, system scopes, default_scopes, optional_scopes, scopes.yaml, scopes.tf, keycloak_openid_client_scope, resource-indicators, fhir_url, allowed_targets, audience mapper, ADR 0004]
 ---
 
 # Realm contract
@@ -32,9 +32,19 @@ Each M2M client has all four mappers attached:
 | `tenant-mapper` | `tenant` | Routing hint (`placer`/`fulfiller`) — sandbox artifact; confirm with UMZH whether to keep |
 | `realm-roles` | `realm_access.roles` | Keycloak built-in |
 
+## Scopes
+
+Custom client scopes are declared in `config/scopes.yaml` and created by `scopes.tf`. All M2M hospital clients receive the `default_scopes` set automatically; `optional_scopes` are registered but not assigned by default.
+
+Scope names follow the SMART Backend Services convention (`system/{Resource}.{interactions}`). The full list is in [`config/scopes.yaml`](../keycloak/config/scopes.yaml).
+
+## RFC 8707 resource indicators
+
+`--features=resource-indicators` is enabled at build time (`Dockerfile`) and dev runtime (`docker-compose.yml`). Each hospital gets a companion `{org_id}-fhir-server` KC client that registers its FHIR base URL as `resource_url`. Cross-hospital audience mappers are generated from `allowed_targets` in each hospital YAML. See [ADR 0004](../docs/adr/0004-rfc8707-resource-indicators.md).
+
 ## Roles
 
-`placer`, `fulfiller`, `admin`.
+`admin`.
 
 ## Sandbox-only config (gate or remove for production)
 
