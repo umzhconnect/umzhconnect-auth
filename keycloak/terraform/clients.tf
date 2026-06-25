@@ -53,12 +53,13 @@ resource "keycloak_openid_client" "m2m" {
 
   client_authenticator_type = "client-jwt"
 
+  # Workaround for KC bug keycloak/keycloak#50251: client_credentials flow
+  # throws an NPE when resource-indicators is enabled unless this is set.
+  use_refresh_tokens_client_credentials = true
+
   extra_config = {
-    "use.jwks.url"                         = "true"
-    "jwks.url"                             = each.value.jwks_url
-    # Workaround for KC bug keycloak/keycloak#50251: client_credentials flow
-    # throws an NPE when resource-indicators is enabled unless this is set.
-    "client_credentials.use_refresh_token" = "true"
+    "use.jwks.url" = "true"
+    "jwks.url"     = each.value.jwks_url
   }
 }
 
