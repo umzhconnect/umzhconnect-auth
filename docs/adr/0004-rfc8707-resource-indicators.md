@@ -1,6 +1,6 @@
 # ADR 0004 — RFC 8707 resource indicators for audience binding
 
-**Status:** Accepted — supersedes [ADR 0003](0003-defer-scope-and-audience-enforcement.md) (audience enforcement deferred)
+**Status:** Superseded by [ADR 0005](0005-d2-named-aud-scopes.md) (D2 named aud: scopes) — superseded [ADR 0003](0003-defer-scope-and-audience-enforcement.md)
 
 ---
 
