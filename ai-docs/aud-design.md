@@ -1,11 +1,11 @@
 ---
-recap: "Audience claim design — RFC 8707 resource indicators implemented via KC experimental feature; aud is now bound to the target FHIR server URL when resource= is supplied."
-keywords: [aud claim, audience, ADR 0002, ADR 0003, ADR 0004, RFC 8707, resource parameter, resource_url, resource-indicators, fhir_url, allowed_targets, keycloak/keycloak#50251, use_refresh_token, invalid_target, one client per hospital, fhir-server client, audience mapper, cross_hospital, clients.tf]
+recap: "Audience claim design — D2 (named aud: scopes) implemented via standard KC scope and audience mapper machinery; no experimental feature dependency."
+keywords: [aud claim, audience, ADR 0002, ADR 0003, ADR 0004, ADR 0005, D2, named aud scopes, aud:hospital-b, include_in_token_scope, included_custom_audience, scope-based audience, fhir_url, allowed_targets, keycloak_openid_client_scope, aud_scope, aud_scope_mapper, clients.tf, scopes.tf, one client per hospital]
 ---
 
 # Audience (`aud`) claim design
 
-**Status:** Implemented — RFC 8707 resource indicators active via KC experimental feature. See [ADR 0004](../docs/adr/0004-rfc8707-resource-indicators.md).
+**Status:** Implemented — D2 (named `aud:` scopes) via standard KC scope machinery. See [ADR 0005](../docs/adr/0005-d2-named-aud-scopes.md).
 
 ---
 
@@ -15,26 +15,13 @@ keywords: [aud claim, audience, ADR 0002, ADR 0003, ADR 0004, RFC 8707, resource
 
 One Keycloak client per hospital, L2 (`private_key_jwt`) only. Declared in `config/hospitals/{org_id}.yaml`.
 
-### FHIR resource-server registrations (`{org_id}-fhir-server`)
+### Realm-level `aud:` scopes
 
-One additional KC client per hospital whose only purpose is to register `fhir_url` as a known `resource_url`. No flows, no service account — KC uses these to resolve and validate the `resource=` parameter.
-
-### Token request flow
-
-```
-POST /realms/umzh-connect/protocol/openid-connect/token
-  grant_type=client_credentials
-  client_id=hospital-a
-  client_assertion=<JWT>
-  client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
-  resource=https://fhir.hospital-b.example/fhir
-```
-
-KC resolves `resource=` against registered `resource_url` values. If it matches a client that `hospital-a` has an audience mapper for, the token `aud` is restricted to `hospital-b-fhir-server`. Unknown URIs → `invalid_target`.
+One KC client scope named `aud:{org_id}` per hospital. Each scope carries an audience mapper with `included_custom_audience = fhir_url`. The scope name is suppressed from the token's `scope` claim (`include_in_token_scope = false`), so only `aud` is affected.
 
 ### Explicit allow-list
 
-`allowed_targets` in each hospital YAML controls which audience mappers are created. A hospital with no entry in `allowed_targets` of the source hospital cannot receive a token scoped to it.
+`allowed_targets` in each hospital YAML controls which `aud:` scopes are assigned as optional scopes on each M2M client. A hospital not in `allowed_targets` does not have the `aud:hospital-b` scope on their client — requesting it returns `invalid_scope`.
 
 ```yaml
 # hospital-a.yaml
@@ -44,51 +31,44 @@ allowed_targets:
   - "hospital-c"
 ```
 
-Terraform (`clients.tf`) derives the cross-product `audience_pairs` local from `allowed_targets` and creates one `keycloak_openid_audience_protocol_mapper` per pair.
+Terraform (`clients.tf`) creates `aud:` scopes for all hospitals; `scopes.tf` assigns `aud:hospital-b` and `aud:hospital-c` as optional scopes on `hospital-a`'s M2M client.
 
-### KC bug workaround
+### Token request flow
 
-`client_credentials.use_refresh_token = true` is set on all M2M clients. Required to avoid an NPE in KC when `resource-indicators` is active (keycloak/keycloak#50251).
-
----
-
-## Feature flag
-
-The `resource-indicators` KC experimental feature is enabled at build time:
-
-```dockerfile
-RUN /opt/keycloak/bin/kc.sh build --features=resource-indicators
+```
+POST /realms/umzh-connect/protocol/openid-connect/token
+  grant_type=client_credentials
+  client_id=hospital-a
+  client_assertion=<JWT>
+  client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+  scope=aud:hospital-b
 ```
 
-And at dev runtime:
+KC grants `aud:hospital-b` (an optional scope assigned to `hospital-a`), fires the audience mapper, and writes `https://fhir.hospital-b.example/fhir` into the token's `aud`. The scope name itself does not appear in the token's `scope` claim.
 
-```yaml
-command: start-dev --features=resource-indicators
-```
+### `aud` value in the token
+
+`included_custom_audience = fhir_url` on the scope's audience mapper. Identical to what RFC 8707 produced. Token validators (`EXPECTED_AUDIENCE`) need no change.
 
 ---
 
 ## Adding a hospital
 
-1. Create `config/hospitals/{org_id}.yaml` with `fhir_url` and `allowed_targets`.
-2. Run `terraform apply` — KC creates the M2M client, the fhir-server client, and all audience mappers declared in `allowed_targets`.
-3. Target hospitals listed in `allowed_targets` must themselves be onboarded (their `{org_id}-fhir-server` client must exist for the mapper to resolve).
+1. Create `config/hospitals/{org_id}.yaml` with `fhir_url`, `jwks_url`, and `allowed_targets`.
+2. Run `terraform apply` — KC creates the M2M client, the `aud:{org_id}` scope, and assigns the permitted `aud:` scopes as optional on the new client and any client that lists the new hospital in its `allowed_targets`.
 
 ---
 
-## D2 as an alternative
+## Prior designs — superseded
 
-D2 (named `aud:` scopes, one client per hospital) is now technically feasible — the original veto was per-audience scope enforcement, which was dropped in ADR 0002/0003. Full trade-off analysis: [aud-d2-analysis.md](aud-d2-analysis.md).
-
----
-
-## Prior design — superseded
-
-### D1-via-YAML (before ADR 0002)
-One KC client per (org, app, target FHIR server). Replaced by ADR 0002 (one client per hospital) when UMZH confirmed per-server granularity was premature.
+### RFC 8707 / resource indicators (ADR 0004)
+`resource=<fhir_url>` parameter; `--features=resource-indicators` experimental KC feature. Replaced by D2 to eliminate the experimental feature dependency. See [ADR 0005](../docs/adr/0005-d2-named-aud-scopes.md).
 
 ### Deferred audience (ADR 0003, before ADR 0004)
-`aud` defaulted to the KC client ID; no FHIR-server binding. Superseded by ADR 0004 once Michael (mrunibe) demonstrated the `resource-indicators` experimental feature working on KC 26.6.1 in umzhconnect-sandbox#31.
+`aud` defaulted to the KC client ID; no FHIR-server binding.
+
+### D1-via-YAML (before ADR 0002)
+One KC client per (org, app, target FHIR server). Replaced by ADR 0002.
 
 ---
 

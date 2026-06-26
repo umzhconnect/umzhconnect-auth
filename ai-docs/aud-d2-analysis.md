@@ -5,7 +5,7 @@ keywords: [D2, named aud scopes, aud:hospital-a, scope-based audience, include_i
 
 # D2 audience design — feasibility analysis
 
-**Status:** Analysis only — not a decision. See [aud-design.md](aud-design.md) for the current implementation (RFC 8707).
+**Status:** Implemented. See [ADR 0005](../docs/adr/0005-d2-named-aud-scopes.md) and [aud-design.md](aud-design.md).
 
 ---
 

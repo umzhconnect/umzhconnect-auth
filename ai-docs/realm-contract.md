@@ -1,6 +1,6 @@
 ---
 recap: "Keycloak realm settings that must stay sandbox-compatible — fixed settings, how clients are generated, mappers, scopes, roles, and documented divergences."
-keywords: [umzh-connect realm, issuer, token lifetime, L1 banned, L2, client-jwt, private_key_jwt, org-reference-mapper, fhir-context-mapper, realm-roles, roles, admin, sandbox parity, registrationAllowed, display_name, ssl_required, start-dev, smart scopes, system scopes, default_scopes, optional_scopes, scopes.yaml, scopes.tf, keycloak_openid_client_scope, resource-indicators, fhir_url, allowed_targets, audience mapper, ADR 0004]
+keywords: [umzh-connect realm, issuer, token lifetime, L1 banned, L2, client-jwt, private_key_jwt, org-reference-mapper, fhir-context-mapper, realm-roles, roles, admin, sandbox parity, registrationAllowed, display_name, ssl_required, start-dev, smart scopes, system scopes, default_scopes, optional_scopes, scopes.yaml, scopes.tf, keycloak_openid_client_scope, D2, aud scope, aud:hospital-b, include_in_token_scope, fhir_url, allowed_targets, audience mapper, ADR 0005]
 ---
 
 # Realm contract
@@ -38,9 +38,9 @@ Custom client scopes are declared in `config/scopes.yaml` and created by `scopes
 
 Scope names follow the SMART Backend Services convention (`system/{Resource}.{interactions}`). The full list is in [`config/scopes.yaml`](../keycloak/config/scopes.yaml).
 
-## RFC 8707 resource indicators
+## D2 audience binding
 
-`--features=resource-indicators` is enabled at build time (`Dockerfile`) and dev runtime (`docker-compose.yml`). Each hospital gets a companion `{org_id}-fhir-server` KC client that registers its FHIR base URL as `resource_url`. Cross-hospital audience mappers are generated from `allowed_targets` in each hospital YAML. See [ADR 0004](../docs/adr/0004-rfc8707-resource-indicators.md).
+One realm-level client scope `aud:{org_id}` per hospital (no KC feature flag required). Each scope carries an audience mapper writing the hospital's `fhir_url` into `aud`; `include_in_token_scope = false` suppresses the scope name from the `scope` claim. `allowed_targets` in each hospital YAML controls which `aud:` scopes are assigned as optional on each M2M client. See [ADR 0005](../docs/adr/0005-d2-named-aud-scopes.md).
 
 ## Roles
 
