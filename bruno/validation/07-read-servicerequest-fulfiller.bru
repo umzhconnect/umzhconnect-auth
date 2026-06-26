@@ -1,0 +1,33 @@
+meta {
+  name: Read ServiceRequest as Fulfiller (context-gated, cross-org)
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{validatorUrl}}/fhir/ServiceRequest/sr-123
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{fulfillerContextToken}}
+}
+
+docs {
+  Demonstrates the complete Fulfiller → Placer access flow from
+  security.md: the fulfiller presents its context token (auth/08) — which
+  carries fhirContext bound to ServiceRequest/sr-123 and aud bound to the
+  Placer's FHIR URL — to read the ServiceRequest resource.
+
+  This exercises the same context gate as validation/04 but from the
+  fulfiller's perspective: a different client, different organization_reference,
+  and a token that has both aud binding and fhirContext.
+
+  Run auth/08 first to obtain fulfillerContextToken.
+}
+
+assert {
+  res.status: eq 200
+  res.body.resourceType: eq ServiceRequest
+}

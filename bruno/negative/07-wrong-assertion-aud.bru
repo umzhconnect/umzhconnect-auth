@@ -1,0 +1,67 @@
+meta {
+  name: Wrong aud in client assertion (400)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  grant_type: client_credentials
+  client_id: {{placerClientId}}
+  client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+  client_assertion: {{wrongAudAssertion}}
+  scope: system/Patient.r
+}
+
+docs {
+  Presents a valid private_key_jwt assertion where aud points to a
+  different endpoint ("https://wrong.example.com/token") rather than
+  this realm's token endpoint. The AS must reject it.
+
+  RFC 7523 §3 requires: "The Authorization Server MUST reject any token
+  whose aud claim does not contain a value identifying it as an intended
+  audience." SMART Backend Services repeats this: aud MUST be the token
+  endpoint URL. The check pins the assertion to exactly one AS — a client
+  cannot reuse an assertion generated for a different server.
+
+  Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
+}
+
+assert {
+  res.status: eq 400
+}
+
+script:pre-request {
+  const crypto = require("crypto");
+  const fs = require("fs");
+  const path = require("path");
+
+  const keysDir = bru.getEnvVar("l2KeysDir") || path.resolve(bru.cwd(), "..", "keys");
+  const pem = fs.readFileSync(path.join(keysDir, "placer-l2.key"), "utf8");
+
+  const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+
+  const clientId = bru.getEnvVar("placerClientId");
+  const header = { alg: "RS256", typ: "JWT", kid: "placer-l2" };
+  const payload = {
+    iss: clientId,
+    sub: clientId,
+    aud: "https://wrong.example.com/token", // wrong endpoint — should be rejected
+    iat: now,
+    exp: now + 60,
+    jti: crypto.randomUUID(),
+  };
+
+  const signingInput = `${b64url(header)}.${b64url(payload)}`;
+  const signature = crypto
+    .sign("RSA-SHA256", Buffer.from(signingInput), pem)
+    .toString("base64url");
+
+  bru.setVar("wrongAudAssertion", `${signingInput}.${signature}`);
+}

@@ -1,0 +1,85 @@
+meta {
+  name: Validate context token claims (fhirContext + org_reference)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{validatorUrl}}/validate
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "token": "{{fulfillerContextToken}}"
+  }
+}
+
+docs {
+  Verifies that the fulfiller context token (auth/08) carries the three
+  IG-required claims beyond standard OAuth:
+
+  1. fhirContext — the workflow object the token is bound to
+     (security.md §Issued access token)
+  2. extensions.umzhconnect.organization_reference — resolvable registry
+     URL of the calling organization (IHE IUA extensions container pattern)
+  3. aud — audience-bound to the Placer's FHIR server URL
+
+  The /validate endpoint is the correctness oracle. JWT claims are
+  additionally decoded in the post-response script for structural checks.
+
+  Run auth/08 first to obtain fulfillerContextToken.
+}
+
+assert {
+  res.status: eq 200
+  res.body.valid: eq true
+}
+
+script:post-response {
+  if (res.getStatus() !== 200) return;
+
+  const token = bru.getVar("fulfillerContextToken");
+  if (!token) {
+    console.warn("fulfillerContextToken is not set — run auth/08 first");
+    return;
+  }
+
+  const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+
+  test("fhirContext claim is present", () => {
+    expect(claims.fhirContext).to.be.an("array").with.length.greaterThan(0);
+  });
+
+  test("fhirContext reference matches contextReference env var", () => {
+    expect(claims.fhirContext[0].reference).to.equal(bru.getEnvVar("contextReference"));
+  });
+
+  test("extensions.umzhconnect.organization_reference is a non-empty string", () => {
+    const orgRef = claims.extensions?.umzhconnect?.organization_reference;
+    expect(orgRef).to.be.a("string").that.is.not.empty;
+  });
+
+  test("organization_reference is the Fulfiller org URL", () => {
+    const orgRef = claims.extensions?.umzhconnect?.organization_reference;
+    expect(orgRef).to.include("hospital-b");
+  });
+
+  test("aud is bound to the Placer FHIR URL", () => {
+    const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+    expect(aud).to.include(bru.getEnvVar("fulfillerTargetFhirUrl"));
+  });
+
+  test("scope contains system/ServiceRequest.rs", () => {
+    expect(claims.scope || "").to.include("system/ServiceRequest.rs");
+  });
+
+  test("iss is the realm issuer", () => {
+    const expectedIss = `${bru.getEnvVar("keycloakUrl")}/realms/${bru.getEnvVar("realm")}`;
+    expect(claims.iss).to.equal(expectedIss);
+  });
+
+  console.log("All IG claims present. aud:", JSON.stringify(claims.aud));
+  console.log("organization_reference:", claims.extensions?.umzhconnect?.organization_reference);
+}

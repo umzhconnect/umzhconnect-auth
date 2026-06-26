@@ -1,7 +1,7 @@
 meta {
-  name: Get Placer Token (L2 + RFC 9396 context)
+  name: Unknown authorization_details type — no fhirContext in token (200)
   type: http
-  seq: 5
+  seq: 8
 }
 
 post {
@@ -16,7 +16,26 @@ body:form-urlencoded {
   client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
   client_assertion: {{placerClientAssertion}}
   scope: system/ServiceRequest.rs system/Patient.r
-  authorization_details: [{"type":"umzh-connect-context","identifier":"{{contextReference}}"}]
+  authorization_details: [{"type":"unknown-context-type","identifier":"ServiceRequest/sr-123"}]
+}
+
+docs {
+  Sends a syntactically valid authorization_details array but with an
+  unrecognized type ("unknown-context-type" instead of "umzh-connect-context").
+  FhirContextMapper only processes type "umzh-connect-context" and silently
+  skips everything else — so a token is issued, but with no fhirContext claim.
+
+  Expected: KC issues a 200 token. The post-response script decodes the JWT
+  and asserts that fhirContext is ABSENT.
+
+  This documents the silent behavior for unknown types. A client sending this
+  would then fail at the Resource Server's context gate (see validation/04 and
+  negative/04) because the token lacks fhirContext.
+
+  Related open gap: FhirContextMapper.java:98 also swallows parse errors on
+  malformed JSON, producing the same silent outcome (open-gaps.md §2).
+
+  Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }
 
 assert {
@@ -25,9 +44,6 @@ assert {
 }
 
 script:pre-request {
-  // Signs an RFC 7523 client assertion with the demo placer private key.
-  // Requires Bruno "developer mode" (filesystem access).
-  // Override key location with the l2KeysDir environment var.
   const crypto = require("crypto");
   const fs = require("fs");
   const path = require("path");
@@ -45,6 +61,7 @@ script:pre-request {
     iss: clientId,
     sub: clientId,
     aud: tokenEndpoint,
+    iat: now,
     exp: now + 60,
     jti: crypto.randomUUID(),
   };
@@ -61,20 +78,11 @@ script:post-response {
   if (res.getStatus() !== 200) return;
 
   const token = res.getBody().access_token;
-  bru.setVar("placerContextToken", token);
-
   const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
 
-  test("fhirContext is present and matches contextReference", () => {
-    expect(claims.fhirContext).to.be.an("array").with.length.greaterThan(0);
-    expect(claims.fhirContext[0].reference).to.equal(bru.getEnvVar("contextReference"));
+  test("fhirContext is absent when type is unrecognized", () => {
+    expect(claims.fhirContext).to.be.undefined;
   });
 
-  test("organization_reference is present in extensions", () => {
-    expect(claims.extensions?.umzhconnect?.organization_reference).to.be.a("string").that.is.not.empty;
-  });
-
-  console.log("fhirContext:", JSON.stringify(claims.fhirContext));
-  console.log("aud:", JSON.stringify(claims.aud));
-  console.log("organization_reference:", claims.extensions?.umzhconnect?.organization_reference);
+  console.log("fhirContext (should be undefined):", claims.fhirContext);
 }

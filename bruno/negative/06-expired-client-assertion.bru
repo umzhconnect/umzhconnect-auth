@@ -1,0 +1,66 @@
+meta {
+  name: Expired client assertion (400)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  grant_type: client_credentials
+  client_id: {{placerClientId}}
+  client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+  client_assertion: {{expiredClientAssertion}}
+  scope: system/Patient.r
+}
+
+docs {
+  Presents a syntactically valid private_key_jwt assertion whose exp
+  claim is in the past (now - 300 s). The AS must reject it because the
+  assertion has already expired — this is a mandatory check defined in
+  RFC 7523 §3 and required by SMART Backend Services.
+
+  The IG specifies: exp must be short-lived (≤ 5 min per SMART).
+  Once exp has passed, the assertion is unusable regardless of signature.
+
+  Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
+}
+
+assert {
+  res.status: eq 400
+}
+
+script:pre-request {
+  const crypto = require("crypto");
+  const fs = require("fs");
+  const path = require("path");
+
+  const keysDir = bru.getEnvVar("l2KeysDir") || path.resolve(bru.cwd(), "..", "keys");
+  const pem = fs.readFileSync(path.join(keysDir, "placer-l2.key"), "utf8");
+
+  const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+  const tokenEndpoint = `${bru.getEnvVar("keycloakUrl")}/realms/${bru.getEnvVar("realm")}/protocol/openid-connect/token`;
+
+  const clientId = bru.getEnvVar("placerClientId");
+  const header = { alg: "RS256", typ: "JWT", kid: "placer-l2" };
+  const payload = {
+    iss: clientId,
+    sub: clientId,
+    aud: tokenEndpoint,
+    iat: now - 600,
+    exp: now - 300, // already expired
+    jti: crypto.randomUUID(),
+  };
+
+  const signingInput = `${b64url(header)}.${b64url(payload)}`;
+  const signature = crypto
+    .sign("RSA-SHA256", Buffer.from(signingInput), pem)
+    .toString("base64url");
+
+  bru.setVar("expiredClientAssertion", `${signingInput}.${signature}`);
+}

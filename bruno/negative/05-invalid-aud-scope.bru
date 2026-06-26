@@ -1,5 +1,5 @@
 meta {
-  name: Get Placer Token (L2 + RFC 9396 context)
+  name: Unauthorized aud scope — allow-list rejection (400)
   type: http
   seq: 5
 }
@@ -15,19 +15,27 @@ body:form-urlencoded {
   client_id: {{placerClientId}}
   client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
   client_assertion: {{placerClientAssertion}}
-  scope: system/ServiceRequest.rs system/Patient.r
-  authorization_details: [{"type":"umzh-connect-context","identifier":"{{contextReference}}"}]
+  scope: system/Patient.r aud:hospital-a
+}
+
+docs {
+  hospital-a requests aud:hospital-a (itself). The aud:hospital-a scope
+  exists in the realm but is NOT in hospital-a's allowed_targets list
+  (aud-design.md §Explicit allow-list), so it is not assigned as an
+  optional scope on hospital-a's client. KC must reject with invalid_scope.
+
+  This tests the D2 audience allow-list: a hospital cannot mint a token
+  audience-bound to itself, nor to any hospital not in its allowed_targets.
+
+  Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }
 
 assert {
-  res.status: eq 200
-  res.body.access_token: isDefined
+  res.status: eq 400
+  res.body.error: eq invalid_scope
 }
 
 script:pre-request {
-  // Signs an RFC 7523 client assertion with the demo placer private key.
-  // Requires Bruno "developer mode" (filesystem access).
-  // Override key location with the l2KeysDir environment var.
   const crypto = require("crypto");
   const fs = require("fs");
   const path = require("path");
@@ -45,6 +53,7 @@ script:pre-request {
     iss: clientId,
     sub: clientId,
     aud: tokenEndpoint,
+    iat: now,
     exp: now + 60,
     jti: crypto.randomUUID(),
   };
@@ -55,26 +64,4 @@ script:pre-request {
     .toString("base64url");
 
   bru.setVar("placerClientAssertion", `${signingInput}.${signature}`);
-}
-
-script:post-response {
-  if (res.getStatus() !== 200) return;
-
-  const token = res.getBody().access_token;
-  bru.setVar("placerContextToken", token);
-
-  const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
-
-  test("fhirContext is present and matches contextReference", () => {
-    expect(claims.fhirContext).to.be.an("array").with.length.greaterThan(0);
-    expect(claims.fhirContext[0].reference).to.equal(bru.getEnvVar("contextReference"));
-  });
-
-  test("organization_reference is present in extensions", () => {
-    expect(claims.extensions?.umzhconnect?.organization_reference).to.be.a("string").that.is.not.empty;
-  });
-
-  console.log("fhirContext:", JSON.stringify(claims.fhirContext));
-  console.log("aud:", JSON.stringify(claims.aud));
-  console.log("organization_reference:", claims.extensions?.umzhconnect?.organization_reference);
 }
