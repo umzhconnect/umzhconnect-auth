@@ -15,8 +15,7 @@ body:form-urlencoded {
   client_id: {{fulfillerClientId}}
   client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
   client_assertion: {{fulfillerClientAssertion}}
-  scope: system/Task.cru system/ServiceRequest.r system/Patient.r
-  resource: {{fulfillerTargetFhirUrl}}
+  scope: system/Task.cru system/ServiceRequest.r system/Patient.r aud:hospital-a
 }
 
 assert {
