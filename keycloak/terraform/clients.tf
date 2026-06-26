@@ -3,34 +3,22 @@
 # Hospital identity lives in keycloak/config/hospitals/{org_id}.yaml.
 # A hospital with no YAML file has no KC client and cannot obtain tokens.
 #
-# RFC 8707 resource indicators (KC experimental feature `resource-indicators`):
-# - Each hospital also gets a lightweight fhir-server client whose only purpose
-#   is to register that hospital's FHIR base URL as a known resource_url.
-# - allowed_targets in the YAML controls which cross-hospital audience mappers
-#   are created (explicit allow-list; no implicit access).
-# - Callers include resource=<fhir_url> in token requests to bind aud to that
-#   specific FHIR server.
+# D2 audience binding (ADR 0005):
+# - Each hospital gets a realm-level client scope "aud:{org_id}" carrying an
+#   audience mapper that writes the hospital's FHIR URL into the token aud.
+# - allowed_targets in the YAML controls which aud: scopes are assigned as
+#   optional on each M2M client (explicit allow-list; no implicit access).
+# - Callers include scope=aud:hospital-b in token requests to bind aud to
+#   that hospital's FHIR server URL.
 #
 # See docs/adr/0002-one-client-per-hospital.md
-#     docs/adr/0004-rfc8707-resource-indicators.md
+#     docs/adr/0005-d2-named-aud-scopes.md
 
 locals {
   _hospital_files = fileset("${path.module}/../config/hospitals", "*.yaml")
   hospitals = {
     for f in local._hospital_files :
     trimsuffix(f, ".yaml") => yamldecode(file("${path.module}/../config/hospitals/${f}"))
-  }
-
-  # All (source, target) pairs declared in allowed_targets — explicit allow-list.
-  audience_pairs = {
-    for pair in flatten([
-      for source_key, source in local.hospitals : [
-        for target_key in lookup(source, "allowed_targets", []) : {
-          source = source_key
-          target = target_key
-        }
-      ]
-    ]) : "${pair.source}->${pair.target}" => pair
   }
 }
 
@@ -53,41 +41,9 @@ resource "keycloak_openid_client" "m2m" {
 
   client_authenticator_type = "client-jwt"
 
-  # Workaround for KC bug keycloak/keycloak#50251: client_credentials flow
-  # throws an NPE when resource-indicators is enabled unless this is set.
-  use_refresh_tokens_client_credentials = true
-
   extra_config = {
     "use.jwks.url" = "true"
     "jwks.url"     = each.value.jwks_url
-  }
-}
-
-# ---------------------------------------------------------------------------
-# FHIR resource-server registrations (RFC 8707)
-#
-# These are not OAuth clients in the traditional sense — they carry no flows
-# and no service account. Their sole purpose is to register each hospital's
-# FHIR base URL as a known resource_url so KC can match the `resource=`
-# parameter in token requests and validate unknown targets with invalid_target.
-# ---------------------------------------------------------------------------
-
-resource "keycloak_openid_client" "fhir_resource_server" {
-  for_each = local.hospitals
-
-  realm_id    = keycloak_realm.umzh_connect.id
-  client_id   = "${each.key}-fhir-server"
-  name        = "${each.value.org_display_name} FHIR Resource Server"
-  description = "RFC 8707 resource-server registration — not an OAuth client"
-  enabled     = true
-
-  access_type                  = "CONFIDENTIAL"
-  service_accounts_enabled     = false
-  standard_flow_enabled        = false
-  direct_access_grants_enabled = false
-
-  extra_config = {
-    "resource_url" = each.value.fhir_url
   }
 }
 
@@ -128,29 +84,33 @@ resource "keycloak_generic_protocol_mapper" "fhir_context" {
 }
 
 # ---------------------------------------------------------------------------
-# Cross-hospital audience mappers (RFC 8707 explicit allow-list)
+# D2 audience scopes — one realm-level scope per hospital
 #
-# Each pair declared in allowed_targets gets an oidc-audience-mapper that
-# adds the target's fhir-server client ID to the token aud when the caller
-# sends resource=<target fhir_url>. Without this mapper the resource-
-# indicators post-processor rejects the request with invalid_target even
-# if the resource_url is registered.
+# include_in_token_scope = false suppresses "aud:hospital-b" from appearing
+# in the token's scope claim; the audience mapper fires independently and
+# writes the FHIR URL into aud.
 # ---------------------------------------------------------------------------
 
-resource "keycloak_openid_audience_protocol_mapper" "cross_hospital" {
-  for_each = local.audience_pairs
+resource "keycloak_openid_client_scope" "aud_scope" {
+  for_each = local.hospitals
 
-  realm_id  = keycloak_realm.umzh_connect.id
-  client_id = keycloak_openid_client.m2m[each.value.source].id
-  name      = "aud-${each.value.target}-fhir-server"
+  realm_id               = keycloak_realm.umzh_connect.id
+  name                   = "aud:${each.key}"
+  description            = "Audience binding for ${each.value.org_display_name} FHIR server"
+  include_in_token_scope = false
+  gui_order              = 2
+  consent_screen_text    = ""
+}
 
-  included_client_audience = "${each.value.target}-fhir-server"
+resource "keycloak_openid_audience_protocol_mapper" "aud_scope_mapper" {
+  for_each = local.hospitals
+
+  realm_id        = keycloak_realm.umzh_connect.id
+  client_scope_id = keycloak_openid_client_scope.aud_scope[each.key].id
+  name            = "aud-fhir-url"
+
+  included_custom_audience = each.value.fhir_url
 
   add_to_id_token     = false
   add_to_access_token = true
-
-  # fhir_resource_server clients must exist before the provider validates
-  # included_client_audience against the live KC API. The bare string
-  # "${each.value.target}-fhir-server" creates no implicit dependency edge.
-  depends_on = [keycloak_openid_client.fhir_resource_server]
 }
