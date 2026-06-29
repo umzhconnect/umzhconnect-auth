@@ -1,7 +1,7 @@
 meta {
-  name: Get Placer Token (L2, private_key_jwt)
+  name: Wrong aud in client assertion (400)
   type: http
-  seq: 6
+  seq: 7
 }
 
 post {
@@ -14,19 +14,29 @@ body:form-urlencoded {
   grant_type: client_credentials
   client_id: {{placerClientId}}
   client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
-  client_assertion: {{placerClientAssertion}}
-  scope: system/Task.cru system/ServiceRequest.rs system/Patient.r aud:hospital-b
+  client_assertion: {{wrongAudAssertion}}
+  scope: system/Patient.r
+}
+
+docs {
+  Presents a valid private_key_jwt assertion where aud points to a
+  different endpoint ("https://wrong.example.com/token") rather than
+  this realm's token endpoint. The AS must reject it.
+
+  RFC 7523 §3 requires: "The Authorization Server MUST reject any token
+  whose aud claim does not contain a value identifying it as an intended
+  audience." SMART Backend Services repeats this: aud MUST be the token
+  endpoint URL. The check pins the assertion to exactly one AS — a client
+  cannot reuse an assertion generated for a different server.
+
+  Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }
 
 assert {
-  res.status: eq 200
-  res.body.access_token: isDefined
+  res.status: eq 400
 }
 
 script:pre-request {
-  // Signs an RFC 7523 client assertion with the demo Level-2 private key
-  // (../keys/placer-l2.key). Requires Bruno "developer mode" (filesystem
-  // access). Override the key location with the l2KeysDir environment var.
   const crypto = require("crypto");
   const fs = require("fs");
   const path = require("path");
@@ -36,16 +46,16 @@ script:pre-request {
 
   const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
   const now = Math.floor(Date.now() / 1000);
-  const tokenEndpoint = `${bru.getEnvVar("keycloakUrl")}/realms/${bru.getEnvVar("realm")}/protocol/openid-connect/token`;
 
   const clientId = bru.getEnvVar("placerClientId");
   const header = { alg: "RS256", typ: "JWT", kid: "placer-l2" };
   const payload = {
     iss: clientId,
     sub: clientId,
-    aud: tokenEndpoint,   // RFC 7523: pins the assertion to this endpoint
-    exp: now + 60,        // short-lived (SMART: <= 5 min)
-    jti: crypto.randomUUID(), // unique per request (replay guard)
+    aud: "https://wrong.example.com/token", // wrong endpoint — should be rejected
+    iat: now,
+    exp: now + 60,
+    jti: crypto.randomUUID(),
   };
 
   const signingInput = `${b64url(header)}.${b64url(payload)}`;
@@ -53,11 +63,5 @@ script:pre-request {
     .sign("RSA-SHA256", Buffer.from(signingInput), pem)
     .toString("base64url");
 
-  bru.setVar("placerClientAssertion", `${signingInput}.${signature}`);
-}
-
-script:post-response {
-  if (res.getStatus() === 200) {
-    bru.setVar("placerL2Token", res.getBody().access_token);
-  }
+  bru.setVar("wrongAudAssertion", `${signingInput}.${signature}`);
 }

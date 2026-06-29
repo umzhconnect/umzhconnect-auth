@@ -1,7 +1,7 @@
 meta {
-  name: Get Placer Token (L2, private_key_jwt)
+  name: Unauthorized aud scope — allow-list rejection (400)
   type: http
-  seq: 6
+  seq: 5
 }
 
 post {
@@ -15,18 +15,27 @@ body:form-urlencoded {
   client_id: {{placerClientId}}
   client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
   client_assertion: {{placerClientAssertion}}
-  scope: system/Task.cru system/ServiceRequest.rs system/Patient.r aud:hospital-b
+  scope: system/Patient.r aud:hospital-a
+}
+
+docs {
+  hospital-a requests aud:hospital-a (itself). The aud:hospital-a scope
+  exists in the realm but is NOT in hospital-a's allowed_targets list
+  (aud-design.md §Explicit allow-list), so it is not assigned as an
+  optional scope on hospital-a's client. KC must reject with invalid_scope.
+
+  This tests the D2 audience allow-list: a hospital cannot mint a token
+  audience-bound to itself, nor to any hospital not in its allowed_targets.
+
+  Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }
 
 assert {
-  res.status: eq 200
-  res.body.access_token: isDefined
+  res.status: eq 400
+  res.body.error: eq invalid_scope
 }
 
 script:pre-request {
-  // Signs an RFC 7523 client assertion with the demo Level-2 private key
-  // (../keys/placer-l2.key). Requires Bruno "developer mode" (filesystem
-  // access). Override the key location with the l2KeysDir environment var.
   const crypto = require("crypto");
   const fs = require("fs");
   const path = require("path");
@@ -43,9 +52,10 @@ script:pre-request {
   const payload = {
     iss: clientId,
     sub: clientId,
-    aud: tokenEndpoint,   // RFC 7523: pins the assertion to this endpoint
-    exp: now + 60,        // short-lived (SMART: <= 5 min)
-    jti: crypto.randomUUID(), // unique per request (replay guard)
+    aud: tokenEndpoint,
+    iat: now,
+    exp: now + 60,
+    jti: crypto.randomUUID(),
   };
 
   const signingInput = `${b64url(header)}.${b64url(payload)}`;
@@ -54,10 +64,4 @@ script:pre-request {
     .toString("base64url");
 
   bru.setVar("placerClientAssertion", `${signingInput}.${signature}`);
-}
-
-script:post-response {
-  if (res.getStatus() === 200) {
-    bru.setVar("placerL2Token", res.getBody().access_token);
-  }
 }

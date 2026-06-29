@@ -1,6 +1,6 @@
 ---
-recap: "Keycloak realm settings that must stay sandbox-compatible — fixed settings, how clients are generated, mappers, roles, and documented divergences."
-keywords: [umzh-connect realm, issuer, token lifetime, placer-client, fulfiller-client, L1 banned, L2, client-jwt, private_key_jwt, org-reference-mapper, fhir-context-mapper, tenant-mapper, realm-roles, roles, placer, fulfiller, admin, sandbox parity, registrationAllowed, display_name, built-in scopes, ssl_required, start-dev, users.tf, smart scopes, direct_access_grants_enabled]
+recap: "Keycloak realm settings that must stay sandbox-compatible — fixed settings, how clients are generated, mappers, scopes, roles, and documented divergences."
+keywords: [umzh-connect realm, issuer, token lifetime, L1 banned, L2, client-jwt, private_key_jwt, org-reference-mapper, fhir-context-mapper, realm-roles, roles, admin, sandbox parity, registrationAllowed, display_name, ssl_required, start-dev, smart scopes, system scopes, default_scopes, optional_scopes, scopes.yaml, scopes.tf, keycloak_openid_client_scope, D2, aud scope, aud:hospital-b, include_in_token_scope, fhir_url, allowed_targets, audience mapper, ADR 0005]
 ---
 
 # Realm contract
@@ -32,9 +32,19 @@ Each M2M client has all four mappers attached:
 | `tenant-mapper` | `tenant` | Routing hint (`placer`/`fulfiller`) — sandbox artifact; confirm with UMZH whether to keep |
 | `realm-roles` | `realm_access.roles` | Keycloak built-in |
 
+## Scopes
+
+Custom client scopes are declared in `config/scopes.yaml` and created by `scopes.tf`. All M2M hospital clients receive the `default_scopes` set automatically; `optional_scopes` are registered but not assigned by default.
+
+Scope names follow the SMART Backend Services convention (`system/{Resource}.{interactions}`). The full list is in [`config/scopes.yaml`](../keycloak/config/scopes.yaml).
+
+## D2 audience binding
+
+One realm-level client scope `aud:{org_id}` per hospital (no KC feature flag required). Each scope carries an audience mapper writing the hospital's `fhir_url` into `aud`; `include_in_token_scope = false` suppresses the scope name from the `scope` claim. `allowed_targets` in each hospital YAML controls which `aud:` scopes are assigned as optional on each M2M client. See [ADR 0005](../docs/adr/0005-d2-named-aud-scopes.md).
+
 ## Roles
 
-`placer`, `fulfiller`, `admin`.
+`admin`.
 
 ## Sandbox-only config (gate or remove for production)
 

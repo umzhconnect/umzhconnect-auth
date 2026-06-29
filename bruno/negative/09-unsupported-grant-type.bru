@@ -1,0 +1,37 @@
+meta {
+  name: Unsupported grant type — authorization_code rejected (400)
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  grant_type: authorization_code
+  client_id: {{placerClientId}}
+  code: fake-auth-code
+  redirect_uri: https://client.example.com/callback
+}
+
+docs {
+  UMZH Connect is machine-to-machine only — the IG explicitly states:
+  "No openid scope is requested, since these are pure machine-to-machine
+  exchanges with no user identity." (security.md §Client authentication)
+
+  Only the client_credentials grant is appropriate. Attempting
+  authorization_code (which requires a user interaction and a valid code)
+  must be rejected. The code is intentionally fake — the intent is to
+  confirm the grant type itself is rejected, not to obtain a real code.
+
+  This test does not require a client assertion because KC validates the
+  grant type before checking client authentication when the type is
+  structurally invalid or not allowed for the client.
+}
+
+assert {
+  res.status: eq 400
+}

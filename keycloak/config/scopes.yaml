@@ -1,0 +1,61 @@
+# UMZH Connect realm client scopes
+#
+# Terraform (scopes.tf) reads this file to:
+#   1. Create each scope as a keycloak_openid_client_scope resource.
+#   2. Assign default_scopes as the default client scopes on every hospital
+#      M2M client — i.e. always included in issued tokens without the caller
+#      requesting them.
+#   3. Register optional_scopes in KC so callers may request them explicitly
+#      via the `scope` parameter; they are not included by default.
+#
+# Scope names follow the SMART Backend Services (system-level) convention.
+# The suffix letters encode FHIR interactions: r=read, s=search, c=create, u=update.
+# See https://hl7.org/fhir/smart-app-launch/scopes-and-launch-context.html
+
+default_scopes:
+  - name: "system/Task.cru"
+    description: "SMART system scope: create/read/update Tasks"
+  - name: "system/ServiceRequest.rs"
+    description: "SMART system scope: read and search ServiceRequests"
+  - name: "system/ServiceRequest.r"
+    description: "SMART system scope: read ServiceRequests"
+  - name: "system/Patient.r"
+    description: "SMART system scope: read Patient demographics"
+  - name: "system/Condition.r"
+    description: "SMART system scope: read Conditions"
+  - name: "system/MedicationStatement.r"
+    description: "SMART system scope: read MedicationStatements"
+  - name: "system/AllergyIntolerance.r"
+    description: "SMART system scope: read AllergyIntolerances"
+  - name: "system/Coverage.r"
+    description: "SMART system scope: read Coverage (insurance)"
+  - name: "system/Observation.r"
+    description: "SMART system scope: read Observations"
+  - name: "system/Procedure.r"
+    description: "SMART system scope: read Procedures"
+  - name: "system/Immunization.r"
+    description: "SMART system scope: read Immunizations"
+  - name: "system/DiagnosticReport.r"
+    description: "SMART system scope: read DiagnosticReports"
+  - name: "system/QuestionnaireResponse.cru"
+    description: "SMART system scope: create/read/update QuestionnaireResponses"
+  - name: "system/ImagingStudy.r"
+    description: "SMART system scope: read ImagingStudies"
+  - name: "system/Organization.r"
+    description: "SMART system scope: read Organizations"
+  - name: "system/Practitioner.r"
+    description: "SMART system scope: read Practitioners"
+  - name: "system/PractitionerRole.r"
+    description: "SMART system scope: read PractitionerRoles"
+
+optional_scopes:
+  - name: "smart-patient-read"
+    description: "SMART on FHIR: Read patient data"
+  - name: "smart-task-write"
+    description: "SMART on FHIR: Create/update tasks"
+  - name: "smart-servicerequest-read"
+    description: "SMART on FHIR: Read service requests"
+  - name: "smart-clinical-read"
+    description: "SMART on FHIR: Read clinical resources (conditions, medications, allergies, etc.)"
+  - name: "smart-questionnaire-write"
+    description: "SMART on FHIR: Create/update questionnaire responses"

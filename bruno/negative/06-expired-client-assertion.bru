@@ -1,5 +1,5 @@
 meta {
-  name: Get Placer Token (L2, private_key_jwt)
+  name: Expired client assertion (400)
   type: http
   seq: 6
 }
@@ -14,19 +14,27 @@ body:form-urlencoded {
   grant_type: client_credentials
   client_id: {{placerClientId}}
   client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
-  client_assertion: {{placerClientAssertion}}
-  scope: system/Task.cru system/ServiceRequest.rs system/Patient.r aud:hospital-b
+  client_assertion: {{expiredClientAssertion}}
+  scope: system/Patient.r
+}
+
+docs {
+  Presents a syntactically valid private_key_jwt assertion whose exp
+  claim is in the past (now - 300 s). The AS must reject it because the
+  assertion has already expired — this is a mandatory check defined in
+  RFC 7523 §3 and required by SMART Backend Services.
+
+  The IG specifies: exp must be short-lived (≤ 5 min per SMART).
+  Once exp has passed, the assertion is unusable regardless of signature.
+
+  Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }
 
 assert {
-  res.status: eq 200
-  res.body.access_token: isDefined
+  res.status: eq 400
 }
 
 script:pre-request {
-  // Signs an RFC 7523 client assertion with the demo Level-2 private key
-  // (../keys/placer-l2.key). Requires Bruno "developer mode" (filesystem
-  // access). Override the key location with the l2KeysDir environment var.
   const crypto = require("crypto");
   const fs = require("fs");
   const path = require("path");
@@ -43,9 +51,10 @@ script:pre-request {
   const payload = {
     iss: clientId,
     sub: clientId,
-    aud: tokenEndpoint,   // RFC 7523: pins the assertion to this endpoint
-    exp: now + 60,        // short-lived (SMART: <= 5 min)
-    jti: crypto.randomUUID(), // unique per request (replay guard)
+    aud: tokenEndpoint,
+    iat: now - 600,
+    exp: now - 300, // already expired
+    jti: crypto.randomUUID(),
   };
 
   const signingInput = `${b64url(header)}.${b64url(payload)}`;
@@ -53,11 +62,5 @@ script:pre-request {
     .sign("RSA-SHA256", Buffer.from(signingInput), pem)
     .toString("base64url");
 
-  bru.setVar("placerClientAssertion", `${signingInput}.${signature}`);
-}
-
-script:post-response {
-  if (res.getStatus() === 200) {
-    bru.setVar("placerL2Token", res.getBody().access_token);
-  }
+  bru.setVar("expiredClientAssertion", `${signingInput}.${signature}`);
 }
