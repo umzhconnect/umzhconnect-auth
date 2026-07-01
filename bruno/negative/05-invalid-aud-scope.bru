@@ -20,12 +20,14 @@ body:form-urlencoded {
 
 docs {
   hospital-a requests aud:hospital-a (itself). The aud:hospital-a scope
-  exists in the realm but is NOT in hospital-a's allowed_targets list
-  (aud-design.md §Explicit allow-list), so it is not assigned as an
-  optional scope on hospital-a's client. KC must reject with invalid_scope.
+  exists in the realm but hospital-a is NOT listed in hospital-a's own
+  allowed_clients (aud-design.md §Explicit allow-list), so the scope is
+  not assigned as optional on hospital-a's client. KC must reject with
+  invalid_scope.
 
   This tests the D2 audience allow-list: a hospital cannot mint a token
-  audience-bound to itself, nor to any hospital not in its allowed_targets.
+  audience-bound to itself, nor to any hospital that does not list it in
+  allowed_clients.
 
   Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }

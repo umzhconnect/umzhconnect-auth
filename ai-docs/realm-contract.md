@@ -1,6 +1,6 @@
 ---
 recap: "Keycloak realm settings that must stay sandbox-compatible — fixed settings, how clients are generated, mappers, scopes, roles, and documented divergences."
-keywords: [umzh-connect realm, issuer, token lifetime, L1 banned, L2, client-jwt, private_key_jwt, org-reference-mapper, fhir-context-mapper, realm-roles, roles, admin, sandbox parity, registrationAllowed, display_name, ssl_required, start-dev, smart scopes, system scopes, default_scopes, optional_scopes, scopes.yaml, scopes.tf, keycloak_openid_client_scope, D2, aud scope, aud:hospital-b, include_in_token_scope, fhir_url, allowed_targets, audience mapper, ADR 0005]
+keywords: [umzh-connect realm, issuer, token lifetime, L1 banned, L2, client-jwt, private_key_jwt, org-reference-mapper, fhir-context-mapper, realm-roles, roles, admin, sandbox parity, registrationAllowed, display_name, ssl_required, start-dev, smart scopes, system scopes, default_scopes, optional_scopes, scopes.yaml, scopes.tf, keycloak_openid_client_scope, D2, aud scope, aud:hospital-b, include_in_token_scope, fhir_url, allowed_clients, audience mapper, ADR 0005, ADR 0006]
 ---
 
 # Realm contract
@@ -40,7 +40,7 @@ Scope names follow the SMART Backend Services convention (`system/{Resource}.{in
 
 ## D2 audience binding
 
-One realm-level client scope `aud:{org_id}` per hospital (no KC feature flag required). Each scope carries an audience mapper writing the hospital's `fhir_url` into `aud`; `include_in_token_scope = false` suppresses the scope name from the `scope` claim. `allowed_targets` in each hospital YAML controls which `aud:` scopes are assigned as optional on each M2M client. See [ADR 0005](../docs/adr/0005-d2-named-aud-scopes.md).
+One realm-level client scope `aud:{org_id}` per hospital (no KC feature flag required). Each scope carries an audience mapper writing the hospital's `fhir_url` into `aud`; `include_in_token_scope = false` suppresses the scope name from the `scope` claim. `allowed_clients` in each hospital's YAML controls which M2M clients may request that hospital's `aud:` scope — the target hospital owns its allow-list. See [ADR 0005](../docs/adr/0005-d2-named-aud-scopes.md) and [ADR 0006](../docs/adr/0006-allowed-clients-hospital-controls-inbound-access.md).
 
 ## Roles
 

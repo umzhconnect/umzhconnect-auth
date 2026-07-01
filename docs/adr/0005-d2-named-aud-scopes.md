@@ -1,6 +1,6 @@
 # ADR 0005 — D2 named `aud:` scopes for audience binding
 
-**Status:** Accepted — supersedes [ADR 0004](0004-rfc8707-resource-indicators.md) (RFC 8707 resource indicators)
+**Status:** Accepted — supersedes [ADR 0004](0004-rfc8707-resource-indicators.md) (RFC 8707 resource indicators); allow-list ownership model amended by [ADR 0006](0006-allowed-clients-hospital-controls-inbound-access.md)
 
 ---
 

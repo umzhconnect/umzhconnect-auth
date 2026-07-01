@@ -6,8 +6,8 @@
 # D2 audience binding (ADR 0005):
 # - Each hospital gets a realm-level client scope "aud:{org_id}" carrying an
 #   audience mapper that writes the hospital's FHIR URL into the token aud.
-# - allowed_targets in the YAML controls which aud: scopes are assigned as
-#   optional on each M2M client (explicit allow-list; no implicit access).
+# - allowed_clients in each target hospital's YAML controls which M2M clients
+#   may request that hospital's aud: scope (explicit allow-list; no implicit access).
 # - Callers include scope=aud:hospital-b in token requests to bind aud to
 #   that hospital's FHIR server URL.
 #

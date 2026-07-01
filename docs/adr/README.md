@@ -39,3 +39,4 @@ Do **not** write an ADR for implementation details, routine config changes, or d
 | [0003](0003-defer-scope-and-audience-enforcement.md) | Defer scope and audience enforcement to downstream | Superseded by [0004](0004-rfc8707-resource-indicators.md) |
 | [0004](0004-rfc8707-resource-indicators.md) | RFC 8707 resource indicators for audience binding | Superseded by [0005](0005-d2-named-aud-scopes.md) |
 | [0005](0005-d2-named-aud-scopes.md) | D2 named `aud:` scopes for audience binding | Accepted |
+| [0006](0006-allowed-clients-hospital-controls-inbound-access.md) | `allowed_clients`: target hospital controls inbound access | Accepted |

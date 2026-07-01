@@ -1,6 +1,6 @@
 ---
 recap: "Audience claim design — D2 (named aud: scopes) implemented via standard KC scope and audience mapper machinery; no experimental feature dependency."
-keywords: [aud claim, audience, ADR 0002, ADR 0003, ADR 0004, ADR 0005, D2, named aud scopes, aud:hospital-b, include_in_token_scope, included_custom_audience, scope-based audience, fhir_url, allowed_targets, keycloak_openid_client_scope, aud_scope, aud_scope_mapper, clients.tf, scopes.tf, one client per hospital]
+keywords: [aud claim, audience, ADR 0002, ADR 0003, ADR 0004, ADR 0005, ADR 0006, D2, named aud scopes, aud:hospital-b, include_in_token_scope, included_custom_audience, scope-based audience, fhir_url, allowed_clients, keycloak_openid_client_scope, aud_scope, aud_scope_mapper, clients.tf, scopes.tf, one client per hospital]
 ---
 
 # Audience (`aud`) claim design
@@ -21,17 +21,17 @@ One KC client scope named `aud:{org_id}` per hospital. Each scope carries an aud
 
 ### Explicit allow-list
 
-`allowed_targets` in each hospital YAML controls which `aud:` scopes are assigned as optional scopes on each M2M client. A hospital not in `allowed_targets` does not have the `aud:hospital-b` scope on their client — requesting it returns `invalid_scope`.
+`allowed_clients` in each hospital YAML controls which M2M clients may request a token with that hospital as audience. A client not listed in the target hospital's `allowed_clients` does not have the `aud:{target}` scope on their client — requesting it returns `invalid_scope`.
 
 ```yaml
-# hospital-a.yaml
-fhir_url: "https://fhir.hospital-a.example/fhir"
-allowed_targets:
-  - "hospital-b"
+# hospital-b.yaml — hospital-b decides who may call it
+fhir_url: "https://fhir.hospital-b.example/fhir"
+allowed_clients:
+  - "hospital-a"
   - "hospital-c"
 ```
 
-Terraform (`clients.tf`) creates `aud:` scopes for all hospitals; `scopes.tf` assigns `aud:hospital-b` and `aud:hospital-c` as optional scopes on `hospital-a`'s M2M client.
+Terraform (`clients.tf`) creates `aud:` scopes for all hospitals; `scopes.tf` assigns `aud:hospital-b` as an optional scope on `hospital-a` and `hospital-c` because both appear in `hospital-b.allowed_clients`. See [ADR 0006](../docs/adr/0006-allowed-clients-hospital-controls-inbound-access.md).
 
 ### Token request flow
 
@@ -54,8 +54,9 @@ KC grants `aud:hospital-b` (an optional scope assigned to `hospital-a`), fires t
 
 ## Adding a hospital
 
-1. Create `config/hospitals/{org_id}.yaml` with `fhir_url`, `jwks_url`, and `allowed_targets`.
-2. Run `terraform apply` — KC creates the M2M client, the `aud:{org_id}` scope, and assigns the permitted `aud:` scopes as optional on the new client and any client that lists the new hospital in its `allowed_targets`.
+1. Create `config/hospitals/{org_id}.yaml` with `fhir_url`, `jwks_url`, and `allowed_clients` (the hospitals permitted to target the new one).
+2. To allow the new hospital to target existing ones, add its `org_id` to `allowed_clients` in those hospitals' YAML files.
+3. Run `terraform apply` — KC creates the M2M client, the `aud:{org_id}` scope, and assigns `aud:` scopes on all clients permitted by the updated allow-lists.
 
 ---
 

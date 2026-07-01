@@ -36,7 +36,7 @@ Suggested order: `auth/` → `validation/` → `negative/`.
 | `02-validate-garbage-token.bru` | Malformed token at `/validate` → 422 |
 | `03-missing-scope.bru` | Default scope present (positive case of default scope) |
 | `04-context-gate-without-context.bru` | L2 token without `fhirContext` → 403 on context-gated resource |
-| `05-invalid-aud-scope.bru` | Hospital requests `aud:` scope not in its `allowed_targets` → 400 `invalid_scope` |
+| `05-invalid-aud-scope.bru` | Hospital requests `aud:` scope it is not listed in the target's `allowed_clients` → 400 `invalid_scope` |
 | `06-expired-client-assertion.bru` | Client assertion with `exp` in the past → 400 (RFC 7523 §3) |
 | `07-wrong-assertion-aud.bru` | Client assertion `aud` pointing to wrong endpoint → 400 |
 | `08-unknown-context-type.bru` | `authorization_details` with unknown type → token issued, no `fhirContext` |
@@ -63,7 +63,7 @@ Requests `06` and `07` include `aud:hospital-b` / `aud:hospital-a` in the `scope
 - Request `06` (hospital-a placer): `scope=... aud:hospital-b` → token `aud` = `https://fhir.hospital-b.example/fhir`
 - Request `07` (hospital-b fulfiller): `scope=... aud:hospital-a` → token `aud` = `https://fhir.hospital-a.example/fhir`
 
-KC grants the `aud:` optional scope (only if it is assigned to the calling client via `allowed_targets`) and fires the audience mapper. An unknown or unauthorized `aud:` scope returns `invalid_scope`.
+KC grants the `aud:` optional scope (only if the calling client appears in the target hospital's `allowed_clients`) and fires the audience mapper. An unknown or unauthorized `aud:` scope returns `invalid_scope`.
 
 **Prerequisite**: Terraform must have been applied after the last commit. If you get 401/400 errors, re-run `docker compose up keycloak-config`.
 

@@ -1,6 +1,6 @@
 ---
 recap: "D2 (named aud scopes, one client per hospital) is now feasible — the original veto was per-audience scope enforcement, which was dropped in ADR 0002/0003. Analysis of D2 vs RFC 8707 as alternatives."
-keywords: [D2, named aud scopes, aud:hospital-a, scope-based audience, include_in_token_scope, included_custom_audience, resource-indicators, experimental feature risk, D2 feasibility, U5, per-audience scope enforcement, ADR 0002, ADR 0003, ADR 0004, RFC 8707, allowed_targets, fhir-server clients]
+keywords: [D2, named aud scopes, aud:hospital-a, scope-based audience, include_in_token_scope, included_custom_audience, resource-indicators, experimental feature risk, D2 feasibility, U5, per-audience scope enforcement, ADR 0002, ADR 0003, ADR 0004, ADR 0005, RFC 8707, allowed_clients, fhir-server clients]
 ---
 
 # D2 audience design — feasibility analysis
