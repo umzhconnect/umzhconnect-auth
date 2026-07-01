@@ -29,6 +29,7 @@ Read the relevant doc before making changes. The frontmatter `keywords` field is
 | [ai-docs/bruno.md](ai-docs/bruno.md) | Bruno collection, L2 sandbox mode |
 | [ai-docs/token-validator.md](ai-docs/token-validator.md) | Token validator config and endpoints |
 | [ai-docs/aud-design.md](ai-docs/aud-design.md) | Audience claim design — current state deferred, D3 migration path |
+| [ai-docs/aud-rfc-backing.md](ai-docs/aud-rfc-backing.md) | RFC standards analysis for the aud claim (RFC 7519, 9068, 8707) |
 | [ai-docs/open-gaps.md](ai-docs/open-gaps.md) | Prioritized action list |
 
 Architecture decisions: [`docs/adr/`](docs/adr/).
