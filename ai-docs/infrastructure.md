@@ -1,6 +1,6 @@
 ---
-recap: "docker-compose stack — services, the KC_HOSTNAME_BACKCHANNEL_DYNAMIC split between internal and published URLs, and the jwks-server role."
-keywords: [KC_HOSTNAME_BACKCHANNEL_DYNAMIC, keycloak:8080, localhost:8180, backchannel URL, published issuer, jwks-server, nginx, token-validator, keycloak-config, start-dev, production hardening, TF_VAR_keycloak_url, apisix, compose network]
+recap: "docker-compose stack — services, the KC_HOSTNAME_BACKCHANNEL_DYNAMIC split between internal and published URLs, and the jwks-server role. Also covers the dev k8s deployment: manifests live in the separate tch-umzh-connect-gitops repo, this repo only builds the images (keycloak, token-validator, tf-config, jwks-server) they reference."
+keywords: [KC_HOSTNAME_BACKCHANNEL_DYNAMIC, keycloak:8080, localhost:8180, backchannel URL, published issuer, jwks-server, nginx, token-validator, keycloak-config, start-dev, production hardening, TF_VAR_keycloak_url, apisix, compose network, tch-umzh-connect-gitops, kgateway, Gateway, HTTPRoute, postgres-operator, postgresql.acid.zalan.do, umzh-connect namespace, auth.umzh.dev.example.com, tf-workspace, tf-config, ci-keycloak.yml, ci-token-validator.yml, ci-tf-config.yml, ci-jwks-server.yml, argocd-image-updater]
 ---
 
 # Infrastructure
@@ -37,3 +37,31 @@ terraform apply
 ## Dev-only flags
 
 `start-dev` in `docker-compose.yml` disables all Keycloak production hardening. Always document this clearly and never use it in a production image. For production, the command becomes `start --optimized`.
+
+## Dev k8s deployment (ArgoCD)
+
+All ArgoCD/k8s manifests live in the separate **`tch-umzh-connect-gitops`** repo
+(`argocd/*.yaml` + `argocd/kustomization.yaml` there), not in this repo. This
+repo only owns image building (Dockerfiles + CI) and the Terraform/config
+source files those images package. The ArgoCD `Application` is defined at
+`tch-syseng-argocd-gitops/argocd/overlays/dev/applications/umzh-connect-auth.yaml`
+and points `spec.source` at `tch-umzh-connect-gitops` (`path: argocd`).
+
+This split means the gitops repo cannot read this repo's raw files (no shared
+checkout, and ArgoCD's multi-source `$ref` substitution only works for Helm
+`valueFiles`, not kustomize `configMapGenerator`) — so anything the k8s
+manifests used to pull in as a `configMapGenerator` file is instead **baked
+into an image** by this repo and referenced by tag, same as `keycloak`/
+`token-validator` already were:
+
+| compose service | k8s equivalent | image built here | manifest (in `tch-umzh-connect-gitops`) |
+|---|---|---|---|
+| `postgres` | `postgresql.acid.zalan.do` CR (Zalando postgres-operator, already in the dev cluster), 5Gi PVC. Operator auto-creates a credentials Secret `keycloak.umzh-connect-db.credentials.postgresql.acid.zalan.do` | — | `argocd/database.yaml` |
+| `keycloak` | Deployment + Service, still `start-dev` | `keycloak/Dockerfile` | `argocd/keycloak.yaml` |
+| `keycloak-config` | k8s `Job`, ArgoCD `PostSync` hook. Runs `terraform apply` using the `.tf` files and hospital/scope config baked into the `tf-config` image at `/src`; the container copies them onto a persistent workspace (`tf-workspace` PVC) before applying, so `terraform.tfstate` survives across hook re-runs — otherwise every sync would try to recreate an already-existing realm | `tf-config/Dockerfile` (`FROM hashicorp/terraform:1.9`, `COPY keycloak/terraform`, `COPY keycloak/config`) | `argocd/keycloak-config-job.yaml` |
+| `jwks-server` | Deployment + Service serving only the public `*.jwks.json` files — the image bakes in just those two files, so the "never serve the demo private `.key` files over HTTP" rule is enforced at build time instead of a manually curated ConfigMap file list | `jwks-server/Dockerfile` (`FROM nginx:1.27-alpine`, `COPY keys/*.jwks.json`) | `argocd/jwks-server.yaml` |
+| `token-validator` | Deployment + Service | `token-validator/Dockerfile` | `argocd/token-validator.yaml` |
+
+**Routing:** the dev cluster's convention for new apps is **kgateway** (Gateway API), not nginx `Ingress` — `argocd/gateway.yaml` (a `Gateway`, `gatewayClassName: kgateway`) and `argocd/httproute.yaml` (an `HTTPRoute` + a paired https-redirect route) publish Keycloak at `https://auth.umzh.dev.example.com`, matching `KC_HOSTNAME`. Internal callers (the Terraform job, token-validator) still use the in-cluster Service DNS (`keycloak:8080`) for the backchannel — same split as `KC_HOSTNAME_BACKCHANNEL_DYNAMIC` in compose, just with a real hostname instead of `localhost:8180`.
+
+**Images (all built here, all bespoke CI, none use `containerized.yml`):** `.github/workflows/ci-keycloak.yml`, `ci-token-validator.yml`, `ci-tf-config.yml`, `ci-jwks-server.yml` — bespoke `docker/build-push-action` jobs because `containerized.yml` hardcodes the GHCR image name to `ghcr.io/<owner>/<repo>` with no per-image override (this repo publishes four distinct images) and skips publish on `main`/`master` without an explicit tag input. All four support `workflow_dispatch` so any image can be rebuilt/pushed on demand. `tf-config` and `jwks-server` have no application source code to scan, so they're not part of `sast.yml`. `argocd-image-updater` (configured on the `Application` in `tch-syseng-argocd-gitops`) tracks all four and rewrites `tch-umzh-connect-gitops/argocd/kustomization.yaml`'s `images:` block on new pushes — that repo needs its own write-capable deploy key, separate from (and not reusing) any read-only key this repo might have.

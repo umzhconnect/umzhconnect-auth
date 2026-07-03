@@ -30,6 +30,7 @@ Read the relevant doc before making changes. The frontmatter `keywords` field is
 | [ai-docs/token-validator.md](ai-docs/token-validator.md) | Token validator config and endpoints |
 | [ai-docs/aud-design.md](ai-docs/aud-design.md) | Audience claim design — current state deferred, D3 migration path |
 | [ai-docs/open-gaps.md](ai-docs/open-gaps.md) | Prioritized action list |
+| [ai-docs/umzh-connect-gitops.md](ai-docs/umzh-connect-gitops.md) | Dev k8s/ArgoCD deployment — repo split across tch-umzh-connect-gitops and tch-syseng-argocd-gitops, image-baked config hand-off |
 
 Architecture decisions: [`docs/adr/`](docs/adr/).
 
