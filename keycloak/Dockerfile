@@ -25,7 +25,7 @@ ENV KC_DB=postgres \
 RUN /opt/keycloak/bin/kc.sh build
 
 # ---- Final image -------------------------------------------------------------
-FROM quay.io/keycloak/keycloak:26.6.1
+FROM quay.io/keycloak/keycloak:26.6.1 AS prodimage
 COPY --from=builder /opt/keycloak /opt/keycloak
 ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]
 # Local dev (docker-compose) overrides this with `start-dev`.

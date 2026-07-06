@@ -1,0 +1,28 @@
+name: SAST
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 0 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql-mapper:
+    uses: trifork/tch-pipeline-templates/.github/workflows/sast.yml@v1.9
+    with:
+      languages: '["java-kotlin"]'
+      project-path: "keycloak/mapper"
+    # Omit secrets: - the mapper's Maven dependencies are all public.
+
+  codeql-token-validator:
+    uses: trifork/tch-pipeline-templates/.github/workflows/sast.yml@v1.9
+    with:
+      languages: '["javascript-typescript"]'
+      project-path: "token-validator"
+    # Omit secrets: - token-validator's npm dependencies are all public.
