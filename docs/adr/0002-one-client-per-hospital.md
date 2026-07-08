@@ -12,7 +12,7 @@ The UMZH Connect ecosystem connects hospitals acting as both referral sources (p
 
 An earlier design modelled this as one KC client per (org, app, target FHIR server) — a fan-out that produces O(N × M × N) clients at N hospitals, M apps per hospital, N target FHIR servers. The driver for that granularity was AS-level scope and audience enforcement: each client was scoped to a specific FHIR server with a specific scope set.
 
-USZ and Balgrist (UMZH) confirmed in the 2026-06-23 meeting that this granularity is not needed at this stage. Authorization will be handled by the FHIR servers themselves for now, and later by a Policy Server. The AS's role is authentication and identity — not authorization.
+UMZH confirmed in the 2026-06-23 meeting that this granularity is not needed at this stage. Authorization will be handled by the FHIR servers themselves for now, and later by a Policy Server. The AS's role is authentication and identity — not authorization.
 
 ---
 

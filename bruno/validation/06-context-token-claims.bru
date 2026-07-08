@@ -24,7 +24,7 @@ docs {
      (security.md §Issued access token)
   2. extensions.umzhconnect.organization_reference — resolvable registry
      URL of the calling organization (IHE IUA extensions container pattern)
-  3. aud — audience-bound to the Placer's FHIR server URL
+  3. aud — the constant ecosystem audience (ADR 0003), i.e. the realm issuer URL
 
   The /validate endpoint is the correctness oracle. JWT claims are
   additionally decoded in the post-response script for structural checks.
@@ -66,9 +66,10 @@ script:post-response {
     expect(orgRef).to.include("hospital-b");
   });
 
-  test("aud is bound to the Placer FHIR URL", () => {
+  test("aud is the constant ecosystem audience", () => {
     const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-    expect(aud).to.include(bru.getEnvVar("fulfillerTargetFhirUrl"));
+    const expectedAud = `${bru.getEnvVar("keycloakUrl")}/realms/${bru.getEnvVar("realm")}`;
+    expect(aud).to.include(expectedAud);
   });
 
   test("scope contains system/ServiceRequest.rs", () => {

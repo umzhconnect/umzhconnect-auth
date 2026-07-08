@@ -1,11 +1,11 @@
 ---
-recap: "D2 (named aud scopes, one client per hospital) is now feasible — the original veto was per-audience scope enforcement, which was dropped in ADR 0002/0003. Analysis of D2 vs RFC 8707 as alternatives."
-keywords: [D2, named aud scopes, aud:hospital-a, scope-based audience, include_in_token_scope, included_custom_audience, resource-indicators, experimental feature risk, D2 feasibility, U5, per-audience scope enforcement, ADR 0002, ADR 0003, ADR 0004, RFC 8707, allowed_targets, fhir-server clients]
+recap: "Historical. D2 (named aud scopes, one client per hospital) was implemented as the default, then removed entirely in favour of a constant ecosystem aud (ADR 0003). Analysis of D2 vs RFC 8707 as alternatives, kept for reference if target-specific aud is rebuilt later."
+keywords: [D2, named aud scopes, aud:hospital-a, scope-based audience, include_in_token_scope, included_custom_audience, resource-indicators, experimental feature risk, D2 feasibility, U5, per-audience scope enforcement, ADR 0002, ADR 0003, RFC 8707, ecosystem-audience-mapper]
 ---
 
 # D2 audience design — feasibility analysis
 
-**Status:** Implemented. See [ADR 0005](../docs/adr/0005-d2-named-aud-scopes.md) and [aud-design.md](aud-design.md).
+**Status:** Historical / removed. D2 was implemented as the default, then removed entirely (not kept as a fallback) in favour of a constant ecosystem `aud` — see [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md). This analysis is kept for reference only, in case target-specific `aud` binding is rebuilt in the future. See [aud-design.md](aud-design.md) for the current implementation.
 
 ---
 
@@ -16,8 +16,8 @@ The original design exploration considered three approaches to binding `aud` in 
 | Design | Mechanism | Status |
 |--------|-----------|--------|
 | D1-via-YAML | One KC client per (org, app, FHIR server) | Superseded by ADR 0002 |
-| D2 | Named `aud:` scopes on the realm; caller requests `scope=aud:hospital-b` | Previously ruled out — see below |
-| D3 / RFC 8707 | `resource=<fhir_url>` parameter; KC resolves against registered resource_url values | **Implemented** (ADR 0004) |
+| D2 | Named `aud:` scopes on the realm; caller requests `scope=aud:hospital-b` | Implemented, then removed by [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) |
+| D3 / RFC 8707 | `resource=<fhir_url>` parameter; KC resolves against registered resource_url values | Implemented, then removed — blocked on KC's experimental support, see [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) |
 
 D2 was ruled out when per-audience scope enforcement was a requirement: in D2, the AS grants any scope the client holds regardless of which `aud:` scope is requested, so you cannot enforce different SMART scope sets per target FHIR server without separate KC clients.
 
@@ -90,7 +90,7 @@ Using `included_custom_audience = fhir_url` on the scope's audience mapper puts 
 
 **Aligns with the IG trajectory.** The SMART on FHIR ecosystem is moving toward `resource` parameter usage. If `umzhconnect-ig` adopts RFC 8707, the current implementation is already aligned.
 
-**Already implemented and tested.** Michael's sandbox PR ([umzhconnect-sandbox#31](https://github.com/umzhconnect/umzhconnect-sandbox/pull/31)) validated the feature on KC 26.6.1. Switching to D2 would be a working-backwards step.
+**Already implemented and tested.** UMZH's sandbox PR ([umzhconnect-sandbox#31](https://github.com/umzhconnect/umzhconnect-sandbox/pull/31)) validated the feature on KC 26.6.1. Switching to D2 would be a working-backwards step.
 
 ---
 
