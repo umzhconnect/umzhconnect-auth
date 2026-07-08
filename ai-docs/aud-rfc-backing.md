@@ -59,7 +59,7 @@ RFC 9068 explicitly addresses the case where no `resource` parameter (RFC 8707) 
 
 > "The authorization server MUST use a default resource indicator in the `aud` claim. The authorization server MAY use the `scope` parameter to infer the resource indicator." (RFC 9068 §3)
 
-This is directly relevant to the current implementation: using a dedicated scope (e.g. `scope=aud:hospital-b`) to drive the `aud` claim is a pattern the RFC explicitly anticipates and permits. The mechanism is Keycloak-specific in its plumbing, but the approach has normative grounding in RFC 9068 §3.
+Using a dedicated scope (e.g. `scope=aud:hospital-b`) to drive the `aud` claim — the D2 design formerly implemented in this repo, since removed per [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) — is a pattern the RFC explicitly anticipates and permits. The mechanism was Keycloak-specific in its plumbing, but the approach has normative grounding in RFC 9068 §3.
 
 ---
 
@@ -77,7 +77,7 @@ POST /token
 
 The authorization server binds `aud` directly to that URI. This is the most explicit and standards-aligned approach: the request mechanism, the audience binding, and the resulting token claim all have direct RFC backing with no inference required.
 
-RFC 8707 is the target standard this implementation should migrate to. However, Keycloak's support for resource indicators is currently gated behind an experimental feature flag (`--features=resource-indicators`), which carries production risk. Until Keycloak promotes this to a stable, supported feature, the scope-based inference approach described above (RFC 9068 §3) serves as the standards-grounded interim.
+RFC 8707 is the target standard this implementation should migrate to. However, Keycloak's support for resource indicators is currently gated behind an experimental feature flag (`--features=resource-indicators`), which carries production risk. Per [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md), the current interim is a constant ecosystem-wide `aud` rather than the scope-based inference approach described above — see that ADR for why the per-target mechanism was removed rather than kept as a fallback.
 
 ---
 

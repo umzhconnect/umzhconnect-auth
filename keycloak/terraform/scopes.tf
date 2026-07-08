@@ -50,14 +50,9 @@ resource "keycloak_openid_client_optional_scopes" "m2m" {
   realm_id  = keycloak_realm.umzh_connect.id
   client_id = keycloak_openid_client.m2m[each.key].id
 
-  # SMART optional scopes (from scopes.yaml) + the aud: scopes for each target
-  # hospital that lists this client in its allowed_clients. A scope not in this
-  # list cannot be requested.
-  optional_scopes = concat(
-    [for s in local._scopes_config.optional_scopes : s.name],
-    [for target_id, target in local.hospitals : "aud:${target_id}"
-    if contains(lookup(target, "allowed_clients", []), each.key)]
-  )
+  # SMART optional scopes (from scopes.yaml). A scope not in this list cannot
+  # be requested.
+  optional_scopes = [for s in local._scopes_config.optional_scopes : s.name]
 
-  depends_on = [keycloak_openid_client_scope.smart, keycloak_openid_client_scope.aud_scope]
+  depends_on = [keycloak_openid_client_scope.smart]
 }

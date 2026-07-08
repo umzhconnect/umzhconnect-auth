@@ -14,7 +14,7 @@ Mock resource server at `token-validator/`. Dev/test only — not a production a
 | `ISSUER` | Yes | Expected `iss` value in tokens |
 | `JWKS_URI` | Yes | Keycloak backchannel JWKS URL for signature verification |
 | `PORT` | No | Default 8086 |
-| `EXPECTED_AUDIENCE` | No | When set, enforces the IG audience restriction. Currently disabled in `docker-compose.yml` because the realm does not yet set a correct `aud` (see [aud-design.md](aud-design.md)). |
+| `EXPECTED_AUDIENCE` | No | When set, enforces the IG audience restriction. `aud` is a constant identifying the umzh-connect ecosystem (the realm issuer URL), not a per-hospital FHIR URL — see [aud-design.md](aud-design.md) and [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md). Currently disabled (unset) in `docker-compose.yml` for the demo stack. |
 
 ## Endpoints
 

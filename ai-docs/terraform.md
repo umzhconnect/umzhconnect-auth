@@ -1,6 +1,6 @@
 ---
-recap: "Terraform structure and pitfalls — hospital YAML-driven client generation, D2 aud: scopes, extra_config double-nesting trap, Vault secrets, and apply commands."
-keywords: [keycloak/keycloak ~>5.0, extra_config, attributes prefix, double-nesting, jwks.url, use.jwks.url, clients.tf, scopes.tf, realm.tf, yamldecode, local.hospitals, TF_VAR_keycloak_url, keycloak-config, apply command, for_each, config/hospitals, org_id, org_display_name, org_reference, jwks_url, vault, vault_kv_secret_v2, admin_password, JWT OIDC, org-reference-mapper, fhir-context-mapper, ecosystem_audience, aud_scope, aud_scope_mapper, keycloak_openid_client_scope, include_in_token_scope, included_custom_audience, allowed_clients, D2, ADR 0003]
+recap: "Terraform structure and pitfalls — hospital YAML-driven client generation, constant ecosystem aud mapper, extra_config double-nesting trap, Vault secrets, and apply commands."
+keywords: [keycloak/keycloak ~>5.0, extra_config, attributes prefix, double-nesting, jwks.url, use.jwks.url, clients.tf, scopes.tf, realm.tf, yamldecode, local.hospitals, TF_VAR_keycloak_url, keycloak-config, apply command, for_each, config/hospitals, org_id, org_display_name, org_reference, jwks_url, vault, vault_kv_secret_v2, admin_password, JWT OIDC, org-reference-mapper, fhir-context-mapper, ecosystem_audience, ecosystem-audience-mapper, included_custom_audience, ADR 0003]
 ---
 
 # Terraform
@@ -23,7 +23,7 @@ Reads all `*.yaml` files from `config/hospitals/`. Each file defines one hospita
 - One `keycloak_openid_client` per hospital with `client-jwt` authenticator and the hospital's `jwks_url`
 - `org-reference-mapper` — hardcoded claim mapper setting `extensions.umzhconnect.organization_reference`
 - `fhir-context-mapper` — custom protocol mapper for `authorization_details` → `fhirContext`
-- `aud:{org_id}` realm-level client scope with an audience mapper writing `fhir_url` into `aud`
+- `ecosystem-audience-mapper` — audience mapper writing a constant ecosystem value (the realm issuer URL) into `aud` on every token, per [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md)
 
 KC client ID = `{org_id}` (the YAML filename without `.yaml`).
 
@@ -35,21 +35,13 @@ org_display_name: "Hospital B"
 org_reference: "https://fhir.hospital-b.example/fhir/Organization/HospitalB"
 fhir_url: "https://fhir.hospital-b.example/fhir"
 jwks_url: "https://hospital-b.example/.well-known/jwks.json"
-allowed_clients:
-  - "hospital-a"
-  - "hospital-c"
 ```
 
-`allowed_clients` declares which M2M clients may request a token with this hospital as audience (`scope=aud:{this_org_id}`). The scope assignment is computed by `scopes.tf` from the target's perspective: hospital-b controls its own allow-list. Adding a hospital = one new YAML file + `terraform apply`. No HCL changes needed.
+Adding a hospital = one new YAML file + `terraform apply`. No HCL changes needed. There is no per-hospital allow-list — [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) removed the `allowed_clients` field along with the target-specific `aud:{org_id}` scope mechanism it used to gate.
 
-## scopes.tf — D2 optional scope assignment
+## scopes.tf — SMART optional scopes
 
-`keycloak_openid_client_optional_scopes.m2m` merges two sets for each M2M client:
-
-1. SMART optional scopes from `config/scopes.yaml`
-2. `aud:{target_id}` for each target hospital that lists this client in its `allowed_clients`
-
-A caller that requests `scope=aud:hospital-b` gets a token with `aud = fhir_url` of `hospital-b`. Requesting a scope not in the list returns `invalid_scope`.
+`keycloak_openid_client_optional_scopes.m2m` registers the SMART optional scopes from `config/scopes.yaml` on every M2M client. Requesting a scope not in that list returns `invalid_scope`.
 
 ## The `extra_config` trap — no `attributes.` prefix
 

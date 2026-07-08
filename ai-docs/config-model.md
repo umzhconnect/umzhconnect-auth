@@ -1,6 +1,6 @@
 ---
 recap: "YAML-driven config model — hospitals and scopes YAML files that drive KC client generation via Terraform."
-keywords: [config/hospitals, config/scopes.yaml, org_id, fhir_url, allowed_clients, jwks_url, org_reference, default_scopes, optional_scopes, scopes.tf, clients.tf, audience mapper, onboarding, terraform apply, ADR 0002, ADR 0003]
+keywords: [config/hospitals, config/scopes.yaml, org_id, fhir_url, jwks_url, org_reference, default_scopes, optional_scopes, scopes.tf, clients.tf, ecosystem-audience-mapper, onboarding, terraform apply, ADR 0002, ADR 0003]
 ---
 
 # Config model
@@ -28,9 +28,6 @@ org_display_name: "Hospital B"
 org_reference: "https://fhir.hospital-b.example/fhir/Organization/HospitalB"
 fhir_url: "https://fhir.hospital-b.example/fhir"
 jwks_url: "https://hospital-b.example/.well-known/jwks.json"
-allowed_clients:
-  - "hospital-a"
-  - "hospital-c"
 ```
 
 | Field | Purpose |
@@ -38,14 +35,13 @@ allowed_clients:
 | `org_id` | KC client ID (must match filename stem) |
 | `org_display_name` | Human label shown in KC admin |
 | `org_reference` | `Organization` FHIR reference — embedded in every token as `extensions.umzhconnect.organization_reference` |
-| `fhir_url` | Base URL of this hospital's FHIR server; written into the token `aud` via the `aud:{org_id}` scope's audience mapper |
+| `fhir_url` | Base URL of this hospital's FHIR server. Not currently written into `aud` — see [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) (`aud` is a constant ecosystem value, not per-hospital) |
 | `jwks_url` | Public JWKS endpoint KC uses to verify `private_key_jwt` assertions |
-| `allowed_clients` | Hospital `org_id` values that may request a token with this hospital as audience (via `scope=aud:{this_org_id}`); omitted → no client may target this hospital |
 
 Terraform creates one KC client per file:
 - `{org_id}` — the M2M client (L2 `private_key_jwt`, service account enabled)
 
-`allowed_clients` drives which M2M clients receive `aud:{org_id}` as an optional scope. Terraform (`scopes.tf`) iterates all hospitals; for each hospital Y, any client X that appears in Y's `allowed_clients` gets `aud:Y` added to its optional scope list. Requesting `scope=aud:hospital-b` from a client not in `hospital-b.allowed_clients` returns `invalid_scope`.
+There is no per-hospital inbound allow-list. Every M2M client's tokens carry the same constant ecosystem `aud`; any FHIR server in the realm accepts any client's token and is responsible for its own authorization. See [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md).
 
 ---
 
@@ -73,14 +69,11 @@ To add a scope: add an entry to `config/scopes.yaml` and run `terraform apply`. 
 
 ## Onboarding a hospital
 
-1. Create `config/hospitals/{org_id}.yaml` with `fhir_url`, `jwks_url`, and `allowed_clients` (the hospitals permitted to request tokens targeting the new hospital).
-2. To allow the new hospital to target existing ones, add its `org_id` to `allowed_clients` in those hospitals' YAML files.
-3. Run `terraform apply`.
+1. Create `config/hospitals/{org_id}.yaml` with `org_id`, `org_display_name`, `org_reference`, `fhir_url`, and `jwks_url`.
+2. Run `terraform apply`.
 
 ---
 
 ## Revoking access
 
-To block a client from targeting a hospital: remove the client's `org_id` from the target hospital's `allowed_clients` and run `terraform apply`. The optional scope assignment is removed; the client can no longer request `aud:{target}`.
-
-To decommission a hospital entirely: delete its `{org_id}.yaml` and remove its `org_id` from all other hospitals' `allowed_clients`. Run `terraform apply`.
+To decommission a hospital entirely: delete its `{org_id}.yaml` and run `terraform apply`. There is no allow-list to clean up elsewhere.

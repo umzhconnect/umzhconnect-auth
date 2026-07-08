@@ -4,15 +4,13 @@
 # A hospital with no YAML file has no KC client and cannot obtain tokens.
 #
 # Audience binding (ADR 0003):
-# - By default, every M2M client's tokens carry a constant "aud" identifying
-#   the umzh-connect ecosystem as a whole (the realm issuer URL) — see the
+# - Every M2M client's tokens carry a constant "aud" identifying the
+#   umzh-connect ecosystem as a whole (the realm issuer URL) — see the
 #   ecosystem_audience mapper below. Target-specific aud binding via RFC 8707
 #   is deferred until Keycloak's resource-indicators support is non-experimental.
-# - The D2 fallback is kept dormant: each hospital
-#   still gets a realm-level client scope "aud:{org_id}" carrying an audience
-#   mapper that writes the hospital's FHIR URL into the token aud, assignable
-#   per allowed_clients. It is not requested by default; use it only for a
-#   hospital pair that needs target-specific isolation before RFC 8707 lands.
+# - There is no per-target aud mechanism and no per-hospital allow-list.
+#   Any FHIR server in the realm accepts any token; FHIR servers are
+#   responsible for their own authorization.
 #
 # See docs/adr/0002-one-client-per-hospital.md
 #     docs/adr/0003-constant-ecosystem-audience.md
@@ -102,39 +100,6 @@ resource "keycloak_openid_audience_protocol_mapper" "ecosystem_audience" {
   name      = "ecosystem-audience-mapper"
 
   included_custom_audience = "${var.keycloak_url}/realms/${keycloak_realm.umzh_connect.realm}"
-
-  add_to_id_token     = false
-  add_to_access_token = true
-}
-
-# ---------------------------------------------------------------------------
-# D2 audience scopes (fallback, ADR 0003) — one realm-level
-# scope per hospital, dormant unless a caller requests scope=aud:{org_id}
-#
-# include_in_token_scope = false suppresses "aud:hospital-b" from appearing
-# in the token's scope claim; the audience mapper fires independently and
-# writes the FHIR URL into aud.
-# ---------------------------------------------------------------------------
-
-resource "keycloak_openid_client_scope" "aud_scope" {
-  for_each = local.hospitals
-
-  realm_id               = keycloak_realm.umzh_connect.id
-  name                   = "aud:${each.key}"
-  description            = "Audience binding for ${each.value.org_display_name} FHIR server"
-  include_in_token_scope = false
-  gui_order              = 2
-  consent_screen_text    = ""
-}
-
-resource "keycloak_openid_audience_protocol_mapper" "aud_scope_mapper" {
-  for_each = local.hospitals
-
-  realm_id        = keycloak_realm.umzh_connect.id
-  client_scope_id = keycloak_openid_client_scope.aud_scope[each.key].id
-  name            = "aud-fhir-url"
-
-  included_custom_audience = each.value.fhir_url
 
   add_to_id_token     = false
   add_to_access_token = true

@@ -36,4 +36,4 @@ Do **not** write an ADR for implementation details, routine config changes, or d
 |----|-------|--------|
 | [0001](0001-defer-auth-level-claim.md) | Defer `auth_level` claim until L3 is introduced | Accepted |
 | [0002](0002-one-client-per-hospital.md) | One Keycloak client per hospital | Accepted |
-| [0003](0003-constant-ecosystem-audience.md) | Constant ecosystem `aud`, deferring RFC 8707 until Keycloak support matures (incl. `allowed_clients` ownership) | Accepted |
+| [0003](0003-constant-ecosystem-audience.md) | Constant ecosystem `aud`, deferring RFC 8707 until Keycloak support matures | Accepted |
