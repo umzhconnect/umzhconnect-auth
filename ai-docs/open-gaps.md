@@ -5,7 +5,7 @@ keywords: [.env git, .gitignore, .env.example, FhirContextMapper WARN, FhirConte
 
 # Open gaps and action list
 
-From the 2026-06-16 meeting (Trifork pre-sync + call with USZ and Balgrist), updated through 2026-06-24.
+From the 2026-06-16 meeting, updated through 2026-06-24.
 
 ## Priority order
 
@@ -26,7 +26,7 @@ From the 2026-06-16 meeting (Trifork pre-sync + call with USZ and Balgrist), upd
 - `authorization_details` → `fhirContext` mapping: current implementation is correct. `FhirContextMapper` reads the raw request parameter and maps it into the AS-signed JWT. No design change needed.
 - L1/L2/L3 direction: never L1 in production; no upgrade path between levels; L3 out of scope.
 - Onboarding approach: Terraform, reproducible, VCS-based.
-- One KC client per hospital: replaced D1-via-YAML (one client per org+app+FHIR server) with one client per hospital (`{org_id}`). See [aud-design.md](aud-design.md), [ADR 0002](../docs/adr/0002-one-client-per-hospital.md), [ADR 0003](../docs/adr/0003-defer-scope-and-audience-enforcement.md).
+- One KC client per hospital: replaced D1-via-YAML (one client per org+app+FHIR server) with one client per hospital (`{org_id}`). See [aud-design.md](aud-design.md), [ADR 0002](../docs/adr/0002-one-client-per-hospital.md), [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md).
 - L1 clients removed: `placer-client` / `fulfiller-client` are not in `clients.tf`. All provisioned clients are L2 (`private_key_jwt`).
 - `users.tf` and `scopes.tf` removed: sandbox user accounts and user-facing consent scopes are not part of this config.
 - `auth_level` claim: deferred until L3 is introduced. See [ADR 0001](../docs/adr/0001-defer-auth-level-claim.md).

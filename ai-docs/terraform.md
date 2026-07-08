@@ -1,6 +1,6 @@
 ---
 recap: "Terraform structure and pitfalls — hospital YAML-driven client generation, D2 aud: scopes, extra_config double-nesting trap, Vault secrets, and apply commands."
-keywords: [keycloak/keycloak ~>5.0, extra_config, attributes prefix, double-nesting, jwks.url, use.jwks.url, clients.tf, scopes.tf, realm.tf, yamldecode, local.hospitals, TF_VAR_keycloak_url, keycloak-config, apply command, for_each, config/hospitals, org_id, org_display_name, org_reference, jwks_url, vault, vault_kv_secret_v2, admin_password, JWT OIDC, org-reference-mapper, fhir-context-mapper, aud_scope, aud_scope_mapper, keycloak_openid_client_scope, include_in_token_scope, included_custom_audience, allowed_clients, D2, ADR 0005, ADR 0006]
+keywords: [keycloak/keycloak ~>5.0, extra_config, attributes prefix, double-nesting, jwks.url, use.jwks.url, clients.tf, scopes.tf, realm.tf, yamldecode, local.hospitals, TF_VAR_keycloak_url, keycloak-config, apply command, for_each, config/hospitals, org_id, org_display_name, org_reference, jwks_url, vault, vault_kv_secret_v2, admin_password, JWT OIDC, org-reference-mapper, fhir-context-mapper, ecosystem_audience, aud_scope, aud_scope_mapper, keycloak_openid_client_scope, include_in_token_scope, included_custom_audience, allowed_clients, D2, ADR 0003]
 ---
 
 # Terraform

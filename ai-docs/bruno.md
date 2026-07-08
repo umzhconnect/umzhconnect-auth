@@ -58,7 +58,7 @@ The `unsafe` label is Bruno's terminology for "run scripts in Node.js instead of
 
 ## D2 — `aud:` scope parameter
 
-Requests `06` and `07` include `aud:hospital-b` / `aud:hospital-a` in the `scope` field to demonstrate cross-hospital audience binding (D2, ADR 0005):
+Requests `06` and `07` include `aud:hospital-b` / `aud:hospital-a` in the `scope` field to demonstrate the D2 fallback for cross-hospital audience binding (see [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md)):
 
 - Request `06` (hospital-a placer): `scope=... aud:hospital-b` → token `aud` = `https://fhir.hospital-b.example/fhir`
 - Request `07` (hospital-b fulfiller): `scope=... aud:hospital-a` → token `aud` = `https://fhir.hospital-a.example/fhir`

@@ -1,6 +1,6 @@
 ---
 recap: "YAML-driven config model — hospitals and scopes YAML files that drive KC client generation via Terraform."
-keywords: [config/hospitals, config/scopes.yaml, org_id, fhir_url, allowed_clients, jwks_url, org_reference, default_scopes, optional_scopes, scopes.tf, clients.tf, audience mapper, onboarding, terraform apply, ADR 0002, ADR 0005, ADR 0006]
+keywords: [config/hospitals, config/scopes.yaml, org_id, fhir_url, allowed_clients, jwks_url, org_reference, default_scopes, optional_scopes, scopes.tf, clients.tf, audience mapper, onboarding, terraform apply, ADR 0002, ADR 0003]
 ---
 
 # Config model

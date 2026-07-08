@@ -10,8 +10,6 @@ Keycloak-based OAuth 2.0 Authorization Server for the UMZH Connect ecosystem, im
 | `token-validator/` | Mock resource server that validates tokens | No — dev/test only |
 | `bruno/` | Request collection (auth, validation, negative cases) | No |
 
-Key contacts: **David Altorfer** (Trifork project lead), **Andreas Ahlm** and **Michael** (USZ/UMZH side).
-
 ---
 
 ## Reference docs (ai-docs/)

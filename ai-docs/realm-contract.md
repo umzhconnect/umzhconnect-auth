@@ -1,6 +1,6 @@
 ---
 recap: "Keycloak realm settings that must stay sandbox-compatible — fixed settings, how clients are generated, mappers, scopes, roles, and documented divergences."
-keywords: [umzh-connect realm, issuer, token lifetime, L1 banned, L2, client-jwt, private_key_jwt, org-reference-mapper, fhir-context-mapper, realm-roles, roles, admin, sandbox parity, registrationAllowed, display_name, ssl_required, start-dev, smart scopes, system scopes, default_scopes, optional_scopes, scopes.yaml, scopes.tf, keycloak_openid_client_scope, D2, aud scope, aud:hospital-b, include_in_token_scope, fhir_url, allowed_clients, audience mapper, ADR 0005, ADR 0006]
+keywords: [umzh-connect realm, issuer, token lifetime, L1 banned, L2, client-jwt, private_key_jwt, org-reference-mapper, fhir-context-mapper, realm-roles, roles, admin, sandbox parity, registrationAllowed, display_name, ssl_required, start-dev, smart scopes, system scopes, default_scopes, optional_scopes, scopes.yaml, scopes.tf, keycloak_openid_client_scope, D2, ecosystem-audience-mapper, aud scope, aud:hospital-b, include_in_token_scope, fhir_url, allowed_clients, audience mapper, ADR 0003]
 ---
 
 # Realm contract
@@ -38,9 +38,11 @@ Custom client scopes are declared in `config/scopes.yaml` and created by `scopes
 
 Scope names follow the SMART Backend Services convention (`system/{Resource}.{interactions}`). The full list is in [`config/scopes.yaml`](../keycloak/config/scopes.yaml).
 
-## D2 audience binding
+## Audience (`aud`) binding
 
-One realm-level client scope `aud:{org_id}` per hospital (no KC feature flag required). Each scope carries an audience mapper writing the hospital's `fhir_url` into `aud`; `include_in_token_scope = false` suppresses the scope name from the `scope` claim. `allowed_clients` in each hospital's YAML controls which M2M clients may request that hospital's `aud:` scope — the target hospital owns its allow-list. See [ADR 0005](../docs/adr/0005-d2-named-aud-scopes.md) and [ADR 0006](../docs/adr/0006-allowed-clients-hospital-controls-inbound-access.md).
+By default, every M2M client carries a constant `aud` identifying the umzh-connect ecosystem as a whole (the realm issuer URL), via the `ecosystem-audience-mapper` protocol mapper on each client. Target-specific `aud` binding (RFC 8707) is deferred until Keycloak's `resource-indicators` support is non-experimental. See [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md).
+
+A dormant fallback remains available: one realm-level client scope `aud:{org_id}` per hospital, each carrying an audience mapper writing the hospital's `fhir_url` into `aud` (`include_in_token_scope = false` suppresses the scope name from the `scope` claim). `allowed_clients` in each hospital's YAML controls which M2M clients may request that hospital's `aud:` scope — the target hospital owns its allow-list. Not requested by default; use it only when a specific hospital pair needs target-specific isolation before RFC 8707 lands. See [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md).
 
 ## Roles
 

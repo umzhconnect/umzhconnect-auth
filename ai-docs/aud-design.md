@@ -1,19 +1,25 @@
 ---
-recap: "Audience claim design — D2 (named aud: scopes) implemented via standard KC scope and audience mapper machinery; no experimental feature dependency."
-keywords: [aud claim, audience, ADR 0002, ADR 0003, ADR 0004, ADR 0005, ADR 0006, D2, named aud scopes, aud:hospital-b, include_in_token_scope, included_custom_audience, scope-based audience, fhir_url, allowed_clients, keycloak_openid_client_scope, aud_scope, aud_scope_mapper, clients.tf, scopes.tf, one client per hospital]
+recap: "Audience claim design — constant ecosystem aud by default (ADR 0003); D2 named aud: scopes kept dormant as a per-hospital fallback for target-specific binding."
+keywords: [aud claim, audience, ADR 0002, ADR 0003, D2, ecosystem_audience, ecosystem-audience-mapper, named aud scopes, aud:hospital-b, include_in_token_scope, included_custom_audience, scope-based audience, fhir_url, allowed_clients, keycloak_openid_client_scope, aud_scope, aud_scope_mapper, clients.tf, scopes.tf, one client per hospital]
 ---
 
 # Audience (`aud`) claim design
 
-**Status:** Implemented — D2 (named `aud:` scopes) via standard KC scope machinery. See [ADR 0005](../docs/adr/0005-d2-named-aud-scopes.md).
+**Status:** Implemented — constant ecosystem `aud` by default. See [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md).
 
 ---
 
 ## Current implementation
 
-### Hospital clients (`{org_id}`)
+### Default: constant ecosystem audience
 
-One Keycloak client per hospital, L2 (`private_key_jwt`) only. Declared in `config/hospitals/{org_id}.yaml`.
+Every M2M client carries an `ecosystem-audience-mapper` protocol mapper (`clients.tf`) that always writes a single constant value — the realm issuer URL (`${keycloak_url}/realms/umzh-connect`) — into `aud`, regardless of requested scopes. This is the default for all token requests; it does not bind `aud` to a specific FHIR server.
+
+Target-specific `aud` binding via RFC 8707 (`resource=` parameter) is deferred until Keycloak's `resource-indicators` feature is non-experimental. See [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) for the full rationale and RFC analysis.
+
+### Fallback: D2 named `aud:` scopes (dormant by default)
+
+Not requested by default. Available for a hospital pair that needs target-specific `aud` isolation before RFC 8707 is viable in Keycloak — see [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md).
 
 ### Realm-level `aud:` scopes
 
@@ -31,7 +37,7 @@ allowed_clients:
   - "hospital-c"
 ```
 
-Terraform (`clients.tf`) creates `aud:` scopes for all hospitals; `scopes.tf` assigns `aud:hospital-b` as an optional scope on `hospital-a` and `hospital-c` because both appear in `hospital-b.allowed_clients`. See [ADR 0006](../docs/adr/0006-allowed-clients-hospital-controls-inbound-access.md).
+Terraform (`clients.tf`) creates `aud:` scopes for all hospitals; `scopes.tf` assigns `aud:hospital-b` as an optional scope on `hospital-a` and `hospital-c` because both appear in `hospital-b.allowed_clients`. The target hospital owns its own inbound allow-list — see [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md).
 
 ### Token request flow
 
@@ -62,14 +68,17 @@ KC grants `aud:hospital-b` (an optional scope assigned to `hospital-a`), fires t
 
 ## Prior designs — superseded
 
-### RFC 8707 / resource indicators (ADR 0004)
-`resource=<fhir_url>` parameter; `--features=resource-indicators` experimental KC feature. Replaced by D2 to eliminate the experimental feature dependency. See [ADR 0005](../docs/adr/0005-d2-named-aud-scopes.md).
+### D2 as the default
+`aud:{org_id}` named scopes were briefly the default audience binding for every token. Superseded by the constant-ecosystem-audience default in [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md); the mechanism itself is retained as the dormant fallback described above.
 
-### Deferred audience (ADR 0003, before ADR 0004)
-`aud` defaulted to the KC client ID; no FHIR-server binding.
+### RFC 8707 / resource indicators
+`resource=<fhir_url>` parameter; `--features=resource-indicators` experimental KC feature. Replaced by D2 to eliminate the experimental feature dependency, then superseded along with D2 by [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md).
 
-### D1-via-YAML (before ADR 0002)
-One KC client per (org, app, target FHIR server). Replaced by ADR 0002.
+### Original deferred audience (2026-06-23, before D2/RFC 8707)
+`aud` defaulted to the KC client ID; no FHIR-server binding. This is the direct ancestor of the current constant-audience default, minus the RFC 8707/D2 detour documented in [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md).
+
+### D1-via-YAML
+One KC client per (org, app, target FHIR server). Replaced by [ADR 0002](../docs/adr/0002-one-client-per-hospital.md).
 
 ---
 
