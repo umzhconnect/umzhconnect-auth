@@ -45,12 +45,33 @@ resource "keycloak_openid_client" "m2m" {
   extra_config = {
     "use.jwks.url" = "true"
     "jwks.url"     = each.value.jwks_url
+    # RFC 9068 §2.1 — JWT access token header "typ" must be "at+jwt".
+    "access.token.header.type.rfc9068" = "true"
   }
 }
 
 # ---------------------------------------------------------------------------
-# Protocol mappers — org reference and FHIR context
+# Protocol mappers — org reference, FHIR context, and client_id (RFC 9068)
 # ---------------------------------------------------------------------------
+
+# RFC 9068 §2.2 requires a "client_id" claim distinct from "azp". Keycloak's
+# built-in Client ID mapper names the claim "clientId" (camelCase), not
+# "client_id" (see keycloak/keycloak#16329), so it's hardcoded here instead.
+resource "keycloak_openid_hardcoded_claim_protocol_mapper" "client_id" {
+  for_each = local.hospitals
+
+  realm_id  = keycloak_realm.umzh_connect.id
+  client_id = keycloak_openid_client.m2m[each.key].id
+  name      = "client-id-mapper"
+
+  claim_name       = "client_id"
+  claim_value      = each.key
+  claim_value_type = "String"
+
+  add_to_id_token     = false
+  add_to_access_token = true
+  add_to_userinfo     = false
+}
 
 resource "keycloak_openid_hardcoded_claim_protocol_mapper" "org_reference" {
   for_each = local.hospitals

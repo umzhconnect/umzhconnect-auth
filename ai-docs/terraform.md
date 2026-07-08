@@ -1,6 +1,6 @@
 ---
 recap: "Terraform structure and pitfalls — hospital YAML-driven client generation, constant ecosystem aud mapper, extra_config double-nesting trap, Vault secrets, and apply commands."
-keywords: [keycloak/keycloak ~>5.0, extra_config, attributes prefix, double-nesting, jwks.url, use.jwks.url, clients.tf, scopes.tf, realm.tf, yamldecode, local.hospitals, TF_VAR_keycloak_url, keycloak-config, apply command, for_each, config/hospitals, org_id, org_display_name, org_reference, jwks_url, vault, vault_kv_secret_v2, admin_password, JWT OIDC, org-reference-mapper, fhir-context-mapper, ecosystem_audience, ecosystem-audience-mapper, included_custom_audience, ADR 0003]
+keywords: [keycloak/keycloak ~>5.0, extra_config, attributes prefix, double-nesting, jwks.url, use.jwks.url, clients.tf, scopes.tf, realm.tf, yamldecode, local.hospitals, TF_VAR_keycloak_url, keycloak-config, apply command, for_each, config/hospitals, org_id, org_display_name, org_reference, jwks_url, vault, vault_kv_secret_v2, admin_password, JWT OIDC, client-id-mapper, client_id claim, RFC 9068, access.token.header.type.rfc9068, at+jwt, org-reference-mapper, fhir-context-mapper, ecosystem_audience, ecosystem-audience-mapper, included_custom_audience, ADR 0003]
 ---
 
 # Terraform
@@ -20,7 +20,8 @@ Provider: `keycloak/keycloak ~> 5.0` (`keycloak/terraform/versions.tf`).
 ## clients.tf — how it works
 
 Reads all `*.yaml` files from `config/hospitals/`. Each file defines one hospital. Creates:
-- One `keycloak_openid_client` per hospital with `client-jwt` authenticator and the hospital's `jwks_url`
+- One `keycloak_openid_client` per hospital with `client-jwt` authenticator, the hospital's `jwks_url`, and `access.token.header.type.rfc9068 = "true"` (RFC 9068 §2.1 `at+jwt` header `typ`)
+- `client-id-mapper` — hardcoded claim mapper setting `client_id` to the client's own ID (RFC 9068 §2.2; not Keycloak's built-in Client ID mapper, which names the claim `clientId`)
 - `org-reference-mapper` — hardcoded claim mapper setting `extensions.umzhconnect.organization_reference`
 - `fhir-context-mapper` — custom protocol mapper for `authorization_details` → `fhirContext`
 - `ecosystem-audience-mapper` — audience mapper writing a constant ecosystem value (the realm issuer URL) into `aud` on every token, per [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md)
