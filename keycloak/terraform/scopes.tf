@@ -24,9 +24,9 @@ resource "keycloak_openid_client_scope" "smart" {
 
   # Scope name appears in the token's `scope` claim — required for SMART
   # resource servers to enforce per-resource permissions.
-  include_in_token_scope  = true
-  gui_order               = 1
-  consent_screen_text     = ""
+  include_in_token_scope = true
+  gui_order              = 1
+  consent_screen_text    = ""
 }
 
 # Assign default scopes to every M2M hospital client.
@@ -50,12 +50,9 @@ resource "keycloak_openid_client_optional_scopes" "m2m" {
   realm_id  = keycloak_realm.umzh_connect.id
   client_id = keycloak_openid_client.m2m[each.key].id
 
-  # SMART optional scopes (from scopes.yaml) + the aud: scopes for each
-  # hospital in allowed_targets. A scope not in this list cannot be requested.
-  optional_scopes = concat(
-    [for s in local._scopes_config.optional_scopes : s.name],
-    [for target in lookup(each.value, "allowed_targets", []) : "aud:${target}"]
-  )
+  # SMART optional scopes (from scopes.yaml). A scope not in this list cannot
+  # be requested.
+  optional_scopes = [for s in local._scopes_config.optional_scopes : s.name]
 
-  depends_on = [keycloak_openid_client_scope.smart, keycloak_openid_client_scope.aud_scope]
+  depends_on = [keycloak_openid_client_scope.smart]
 }

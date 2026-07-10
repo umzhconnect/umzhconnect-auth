@@ -10,8 +10,6 @@ Keycloak-based OAuth 2.0 Authorization Server for the UMZH Connect ecosystem, im
 | `token-validator/` | Mock resource server that validates tokens | No — dev/test only |
 | `bruno/` | Request collection (auth, validation, negative cases) | No |
 
-Key contacts: **David Altorfer** (Trifork project lead), **Andreas Ahlm** and **Michael** (USZ/UMZH side).
-
 ---
 
 ## Reference docs (ai-docs/)
@@ -29,6 +27,7 @@ Read the relevant doc before making changes. The frontmatter `keywords` field is
 | [ai-docs/bruno.md](ai-docs/bruno.md) | Bruno collection, L2 sandbox mode |
 | [ai-docs/token-validator.md](ai-docs/token-validator.md) | Token validator config and endpoints |
 | [ai-docs/aud-design.md](ai-docs/aud-design.md) | Audience claim design — current state deferred, D3 migration path |
+| [ai-docs/aud-rfc-backing.md](ai-docs/aud-rfc-backing.md) | RFC standards analysis for the aud claim (RFC 7519, 9068, 8707) |
 | [ai-docs/open-gaps.md](ai-docs/open-gaps.md) | Prioritized action list |
 | [ai-docs/umzh-connect-gitops.md](ai-docs/umzh-connect-gitops.md) | Dev k8s/ArgoCD deployment — repo split across tch-umzh-connect-gitops and tch-syseng-argocd-gitops, image-baked config hand-off |
 

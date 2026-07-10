@@ -121,10 +121,10 @@ services:
       ISSUER: http://localhost:${KEYCLOAK_PORT}/realms/umzh-connect
       # Signature keys are fetched over the compose network (backchannel)
       JWKS_URI: http://keycloak:8080/realms/umzh-connect/protocol/openid-connect/certs
-      # D2 (ADR 0005): aud = fhir_url of the target hospital when scope=aud:{org_id} is supplied.
-      # Set EXPECTED_AUDIENCE to the fhir_url of this validator's host hospital
-      # once a real FHIR server URL is known; leave unset for the demo stack.
-      # EXPECTED_AUDIENCE: https://fhir.hospital-a.example/fhir
+      # ADR 0003: aud = a constant identifying the umzh-connect ecosystem
+      # (the realm issuer URL), not a per-hospital FHIR URL. If enabled,
+      # EXPECTED_AUDIENCE should equal ISSUER above; leave unset for the demo stack.
+      # EXPECTED_AUDIENCE: http://localhost:${KEYCLOAK_PORT}/realms/umzh-connect
     ports:
       - '${VALIDATOR_PORT}:8086'
     depends_on:

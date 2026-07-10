@@ -1,6 +1,6 @@
 ---
 recap: "YAML-driven config model — hospitals and scopes YAML files that drive KC client generation via Terraform."
-keywords: [config/hospitals, config/scopes.yaml, org_id, fhir_url, allowed_targets, jwks_url, org_reference, default_scopes, optional_scopes, scopes.tf, clients.tf, resource_url, fhir-server client, audience mapper, onboarding, terraform apply, ADR 0002, ADR 0004]
+keywords: [config/hospitals, config/scopes.yaml, org_id, fhir_url, jwks_url, org_reference, default_scopes, optional_scopes, scopes.tf, clients.tf, ecosystem-audience-mapper, onboarding, terraform apply, ADR 0002, ADR 0003]
 ---
 
 # Config model
@@ -23,14 +23,11 @@ keycloak/config/
 Identity, authentication, and audience config for one hospital. A hospital with no file here has no KC client and cannot obtain tokens.
 
 ```yaml
-org_id: "hospital-a"
-org_display_name: "Hospital A"
-org_reference: "https://fhir.hospital-a.example/fhir/Organization/HospitalA"
-fhir_url: "https://fhir.hospital-a.example/fhir"
-jwks_url: "https://hospital-a.example/.well-known/jwks.json"
-allowed_targets:
-  - "hospital-b"
-  - "hospital-c"
+org_id: "hospital-b"
+org_display_name: "Hospital B"
+org_reference: "https://fhir.hospital-b.example/fhir/Organization/HospitalB"
+fhir_url: "https://fhir.hospital-b.example/fhir"
+jwks_url: "https://hospital-b.example/.well-known/jwks.json"
 ```
 
 | Field | Purpose |
@@ -38,15 +35,13 @@ allowed_targets:
 | `org_id` | KC client ID (must match filename stem) |
 | `org_display_name` | Human label shown in KC admin |
 | `org_reference` | `Organization` FHIR reference — embedded in every token as `extensions.umzhconnect.organization_reference` |
-| `fhir_url` | Base URL of this hospital's FHIR server, registered as `resource_url` on the companion `{org_id}-fhir-server` KC client (RFC 8707) |
+| `fhir_url` | Base URL of this hospital's FHIR server. Not currently written into `aud` — see [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) (`aud` is a constant ecosystem value, not per-hospital) |
 | `jwks_url` | Public JWKS endpoint KC uses to verify `private_key_jwt` assertions |
-| `allowed_targets` | Other hospital `org_id` values this client may mint audience-bound tokens for; omitted → no cross-hospital token flow |
 
-Terraform creates two KC clients per file:
-1. `{org_id}` — the M2M client (L2 `private_key_jwt`, service account enabled)
-2. `{org_id}-fhir-server` — a no-flow resource-server registration that carries `resource_url = fhir_url` for RFC 8707 matching
+Terraform creates one KC client per file:
+- `{org_id}` — the M2M client (L2 `private_key_jwt`, service account enabled)
 
-`allowed_targets` drives the cross-hospital audience mapper cross-product (`clients.tf:audience_pairs`). Adding `hospital-b` here creates an `oidc-audience-mapper` on `{org_id}` that includes `hospital-b-fhir-server` in the token `aud` when `resource=<hospital-b fhir_url>` is sent.
+There is no per-hospital inbound allow-list. Every M2M client's tokens carry the same constant ecosystem `aud`; any FHIR server in the realm accepts any client's token and is responsible for its own authorization. See [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md).
 
 ---
 
@@ -74,16 +69,11 @@ To add a scope: add an entry to `config/scopes.yaml` and run `terraform apply`. 
 
 ## Onboarding a hospital
 
-1. Create `config/hospitals/{org_id}.yaml` with `fhir_url` and `allowed_targets`.
-2. Add entries to `allowed_targets` in the source hospitals that should be able to target this one.
-3. Run `terraform apply`.
-
-The target hospital's `{org_id}-fhir-server` client must exist before KC can resolve audience mappers pointing to it, so onboard both sides before testing cross-hospital flows.
+1. Create `config/hospitals/{org_id}.yaml` with `org_id`, `org_display_name`, `org_reference`, `fhir_url`, and `jwks_url`.
+2. Run `terraform apply`.
 
 ---
 
 ## Revoking access
 
-To block a hospital from minting tokens for a target: remove the target from its `allowed_targets` list and run `terraform apply`. The audience mapper is destroyed; the hospital can no longer include that target's FHIR server in `aud`.
-
-To decommission a hospital entirely: delete its `{org_id}.yaml` and remove it from all other hospitals' `allowed_targets`. Run `terraform apply`.
+To decommission a hospital entirely: delete its `{org_id}.yaml` and run `terraform apply`. There is no allow-list to clean up elsewhere.
