@@ -137,6 +137,13 @@ To swap this Keycloak into `umzhconnect-sandbox`:
 Significant design choices and conscious non-decisions are recorded as ADRs in
 [`docs/adr/`](docs/adr/README.md).
 
+## Use cases / operator runbook
+
+How to process operational requests (onboarding, key rotation, offboarding,
+incidents) and the reference token-flow behaviors are documented in
+[`docs/use-cases/operational.md`](docs/use-cases/operational.md) and
+[`docs/use-cases/technical.md`](docs/use-cases/technical.md).
+
 ## Production notes
 
 Only the Keycloak image + realm configuration are production-bound. The
