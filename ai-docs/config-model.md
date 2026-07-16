@@ -1,6 +1,6 @@
 ---
-recap: "YAML-driven config model — hospitals and scopes YAML files that drive KC client generation via Terraform."
-keywords: [config/hospitals, config/scopes.yaml, org_id, fhir_url, jwks_url, org_reference, default_scopes, optional_scopes, scopes.tf, clients.tf, ecosystem-audience-mapper, onboarding, terraform apply, ADR 0002, ADR 0003]
+recap: "YAML-driven config model — hospitals and scopes YAML files that drive KC client generation via Terraform, plus the independent hospitals-l1 debug-client directory."
+keywords: [config/hospitals, config/hospitals-l1, config/scopes.yaml, org_id, fhir_url, jwks_url, org_reference, default_scopes, optional_scopes, scopes.tf, clients.tf, ecosystem-audience-mapper, auth_level, onboarding, terraform apply, ADR 0002, ADR 0003, ADR 0004]
 ---
 
 # Config model
@@ -13,7 +13,9 @@ All KC clients are generated from YAML files. No HCL changes are needed to add o
 keycloak/config/
   scopes.yaml              # all custom client scopes for the realm
   hospitals/
-    {org_id}.yaml          # one file per onboarded hospital
+    {org_id}.yaml          # one file per onboarded hospital (L2, default)
+  hospitals-l1/
+    {org_id}.yaml          # optional L1 debug client, independent of hospitals/
 ```
 
 ---
@@ -42,6 +44,28 @@ Terraform creates one KC client per file:
 - `{org_id}` — the M2M client (L2 `private_key_jwt`, service account enabled)
 
 There is no per-hospital inbound allow-list. Every M2M client's tokens carry the same constant ecosystem `aud`; any FHIR server in the realm accepts any client's token and is responsible for its own authorization. See [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md).
+
+---
+
+## `config/hospitals-l1/{org_id}.yaml` — optional L1 debug client
+
+An **opt-in, per-hospital** L1 (`client_secret`) debug client, independent of `config/hospitals/{org_id}.yaml`. See [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md) and [the directory's own README](../keycloak/config/hospitals-l1/README.md) for the field schema.
+
+```yaml
+org_display_name: "Hospital A"
+org_reference: "https://fhir.hospital-a.example/fhir/Organization/HospitalA"
+fhir_url: "https://fhir.hospital-a.example/fhir"
+reason: "Firewall/JWKS connectivity debugging"
+requested_by: "Hospital A IT"
+requested_date: "2026-07-16"
+```
+
+Key points:
+- **Independent of the L2 file for the same `org_id`** — a hospital may have an L1 file, an L2 file, both, or neither. There is no requirement that the L2 file exist first.
+- No `jwks_url` — authenticates with a Keycloak-generated `client_secret`, not `private_key_jwt`.
+- Terraform creates `{org_id}--l1` with the same mapper set as the L2 client (`client-id-mapper`, `org-reference-mapper`, `fhir-context-mapper`, `ecosystem-audience-mapper`) plus an `auth_level` claim (`"L1"` vs `"L2"` on the primary client) so resource servers can distinguish them.
+- Secret handling is deliberately relaxed relative to real production secrets — see ADR 0004.
+- Revoke the same way as a hospital: delete the file, `terraform apply`.
 
 ---
 
