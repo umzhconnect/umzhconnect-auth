@@ -61,6 +61,17 @@ opts into L1.**
   absence is a valid state. Resource servers can enforce a minimum level by
   checking the claim's value directly, with no absent-claim case to reason
   about.
+- **Kept under `extensions.umzhconnect`, not promoted to a top-level
+  claim.** That container is reserved for claims specific to the
+  UMZH-Connect authorization model that no external spec defines — the same
+  reason `organization_reference` lives there. `client_id` and `fhirContext`
+  are top-level *because* RFC 9068 and SMART App Launch respectively
+  require/define them there, not because they're UMZH-Connect-specific.
+  `auth_level` has no external spec backing it, so nesting it keeps that
+  line consistent and avoids ever colliding with a future top-level standard
+  claim of the same name. This is a convention choice, not a technical
+  constraint — JWT claims are a flat namespace, so a top-level `auth_level`
+  would work identically.
 - **Relaxed secret handling for L1 only.** The L1 client secret is
   Keycloak-generated (never hardcoded) and surfaced via a Terraform output,
   but — unlike a real production credential — it may be copied into a plain
