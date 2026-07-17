@@ -31,7 +31,7 @@ Applied to both the L2 client (`{org_id}`) and, when provisioned, the L1 debug c
 | `org-reference-mapper` | `extensions.umzhconnect.organization_reference` | Set by AS from the app's `org_reference` field — never by the client |
 | `fhir-context-mapper` | `fhirContext` | Reads `authorization_details` from raw request; see [mapper.md](mapper.md) |
 | `ecosystem-audience-mapper` | `aud` | Constant ecosystem `aud` — see [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) |
-| `auth-level-mapper` | `extensions.umzhconnect.auth_level` | Only present on the L1 debug client, hardcoded `"L1"`. The primary (L2) client does not get this claim — absence already implies `"L2"` per [ADR 0001](../docs/adr/0001-defer-auth-level-claim.md), reinstated by [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md) |
+| `auth-level-mapper` | `extensions.umzhconnect.auth_level` | Required on every client — hardcoded `"L2"` on the primary client, `"L1"` on the debug client. Reinstated by [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md), superseding the deferral in [ADR 0001](../docs/adr/0001-defer-auth-level-claim.md); any future L3 client must stamp `"L3"` the same way — there's no level for which the claim is absent |
 
 ## RFC 9068 conformance
 

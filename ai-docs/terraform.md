@@ -42,7 +42,7 @@ Adding a hospital = one new YAML file + `terraform apply`. No HCL changes needed
 
 ## Optional L1 debug client (`config/hospitals-l1/`)
 
-Reads `config/hospitals-l1/*.yaml` into `local.hospitals_l1`, independent of `local.hospitals`. For each entry, creates `keycloak_openid_client.m2m_l1["{org_id}"]` with `client_id = "{org_id}--l1"`, `client_authenticator_type = "client-secret"` (Keycloak-generated secret, surfaced via the `m2m_l1_client_secrets` sensitive output), and the same mapper set as the L2 client plus an `auth-level-mapper` claim hardcoded to `"L1"`. The primary L2 client deliberately does **not** get an `auth_level` claim — per [ADR 0001](../docs/adr/0001-defer-auth-level-claim.md), absence already implies `"L2"`; adding it explicitly would be a needless sandbox-parity divergence on every existing production token. See [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md) and [config-model.md](config-model.md).
+Reads `config/hospitals-l1/*.yaml` into `local.hospitals_l1`, independent of `local.hospitals`. For each entry, creates `keycloak_openid_client.m2m_l1["{org_id}"]` with `client_id = "{org_id}--l1"`, `client_authenticator_type = "client-secret"` (Keycloak-generated secret, surfaced via the `m2m_l1_client_secrets` sensitive output), and the same mapper set as the L2 client including its own `auth-level-mapper` hardcoded to `"L1"`. The primary L2 client gets the same mapper hardcoded to `"L2"` — `auth_level` is a required claim on every M2M client, not implied by absence; see [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md) (superseding the [ADR 0001](../docs/adr/0001-defer-auth-level-claim.md) deferral) and [config-model.md](config-model.md).
 
 ## scopes.tf — SMART optional scopes
 

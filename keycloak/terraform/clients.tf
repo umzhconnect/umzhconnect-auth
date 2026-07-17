@@ -105,12 +105,25 @@ resource "keycloak_openid_hardcoded_claim_protocol_mapper" "org_reference" {
   add_to_userinfo     = false
 }
 
-# Note: the primary (L2) client intentionally does NOT get an auth_level
-# claim. Per ADR 0001 (reinstated by ADR 0004), a missing claim already
-# implies "L2" — stamping "L2" explicitly here would be redundant and would
-# add a new claim to every existing production token (a sandbox-parity
-# divergence with no benefit). Only the L1 debug client below is stamped,
-# since its presence is the actual exception to call out.
+# auth_level is a required claim on every M2M client — see ADR 0004. Explicit
+# on both L1 and L2 (rather than "absence implies L2") so resource servers
+# always have a claim to check, with no ambiguity if a token is missing it
+# for an unrelated reason. Any future L3 client must stamp "L3" here too.
+resource "keycloak_openid_hardcoded_claim_protocol_mapper" "auth_level" {
+  for_each = local.hospitals
+
+  realm_id  = keycloak_realm.umzh_connect.id
+  client_id = keycloak_openid_client.m2m[each.key].id
+  name      = "auth-level-mapper"
+
+  claim_name       = "extensions.umzhconnect.auth_level"
+  claim_value      = "L2"
+  claim_value_type = "String"
+
+  add_to_id_token     = false
+  add_to_access_token = true
+  add_to_userinfo     = false
+}
 
 resource "keycloak_generic_protocol_mapper" "fhir_context" {
   for_each = local.hospitals

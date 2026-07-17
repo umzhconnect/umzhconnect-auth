@@ -42,22 +42,25 @@ opts into L1.**
 - KC client ID `{org_id}--l1`, `client_authenticator_type = "client-secret"`,
   `service_accounts_enabled = true`. Same mapper set as
   the L2 client (`client-id-mapper`, `org-reference-mapper`,
-  `fhir-context-mapper`, `ecosystem-audience-mapper`) plus the new
-  `auth_level` claim (see below), and the same default/optional scope
-  assignment, so the debug client is otherwise a faithful stand-in for the
-  real integration.
-- **`auth_level` claim reinstated, but only on the L1 client**
-  (`extensions.umzhconnect.auth_level = "L1"`). This reactivates the claim
-  deferred by [ADR 0001](0001-defer-auth-level-claim.md) — that deferral's
-  premise ("only one level in use, so the claim carries no distinguishing
-  information") no longer holds once L1 and L2 clients coexist. The primary
-  L2 client deliberately does **not** get the claim: ADR 0001 already
-  established that a missing claim implies `"L2"`, so stamping `"L2"`
-  explicitly would be redundant and would add a new claim to every existing
-  production token for no benefit — a sandbox-parity divergence with no
-  upside. Resource servers/introspection consumers can enforce a minimum
-  level by checking for `auth_level == "L1"` (reject) vs. absent (treat as
-  L2).
+  `fhir-context-mapper`, `ecosystem-audience-mapper`, `auth-level-mapper`),
+  and the same default/optional scope assignment, so the debug client is
+  otherwise a faithful stand-in for the real integration.
+- **`auth_level` claim reinstated as a required claim on every M2M client,
+  L1 and L2 alike** (`extensions.umzhconnect.auth_level`, `"L1"` or `"L2"`).
+  This reactivates the claim deferred by [ADR 0001](0001-defer-auth-level-claim.md)
+  — that deferral's premise ("only one level in use, so the claim carries no
+  distinguishing information") no longer holds once L1 and L2 clients
+  coexist. An earlier draft of this ADR stamped the claim only on the L1
+  client, treating its absence as an implied `"L2"` — [PR review
+  feedback](https://github.com/trifork/tch-umzh-connect-authentication-server/pull/13#discussion_r3596731042)
+  pointed out that "implied by absence" is not intuitive and makes it easy
+  to get a resource server's minimum-level check wrong (e.g. a bug that
+  drops the claim mapper is indistinguishable from a legitimate L2 token).
+  Every access token now carries an explicit `auth_level`, and any future L3
+  client must stamp `"L3"` the same way — there's no level for which
+  absence is a valid state. Resource servers can enforce a minimum level by
+  checking the claim's value directly, with no absent-claim case to reason
+  about.
 - **Relaxed secret handling for L1 only.** The L1 client secret is
   Keycloak-generated (never hardcoded) and surfaced via a Terraform output,
   but — unlike a real production credential — it may be copied into a plain
@@ -83,11 +86,15 @@ opts into L1.**
 - A hospital can have up to two KC clients: `{org_id}` (L2, default) and
   `{org_id}--l1` (L1, opt-in). Onboarding is unchanged for hospitals that
   don't request L1.
-- Tokens now carry an `auth_level` claim distinguishing L1 from L2. Any
-  resource server wanting to reject L1 tokens (e.g. treat L1 as
-  debug-only and refuse it for real clinical data flows) can do so via this
-  claim — enforcement is out of scope for this ADR and left to resource
-  servers/a future Policy Server.
+- Every access token now carries a required `auth_level` claim (`"L1"` or
+  `"L2"`) distinguishing L1 from L2. Any resource server wanting to reject
+  L1 tokens (e.g. treat L1 as debug-only and refuse it for real clinical
+  data flows) can do so via this claim — enforcement is out of scope for
+  this ADR and left to resource servers/a future Policy Server.
+- This is a divergence from the sandbox realm, which has no `auth_level`
+  claim on its (L2-only) tokens — acceptable because the claim's presence
+  is additive and doesn't change how existing sandbox-compatible consumers
+  parse the token.
 - L1 client secrets get lighter-weight handling than other secrets in this
   project. This is an accepted, scoped risk tied to L1's debug-only purpose,
   not a general secret-hygiene downgrade.
