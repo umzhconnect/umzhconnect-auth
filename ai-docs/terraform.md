@@ -1,6 +1,6 @@
 ---
-recap: "Terraform structure and pitfalls — hospital YAML-driven client generation, constant ecosystem aud mapper, extra_config double-nesting trap, Vault secrets, and apply commands."
-keywords: [keycloak/keycloak ~>5.0, extra_config, attributes prefix, double-nesting, jwks.url, use.jwks.url, clients.tf, scopes.tf, realm.tf, yamldecode, local.hospitals, TF_VAR_keycloak_url, keycloak-config, apply command, for_each, config/hospitals, org_id, org_display_name, org_reference, jwks_url, vault, vault_kv_secret_v2, admin_password, JWT OIDC, client-id-mapper, client_id claim, RFC 9068, access.token.header.type.rfc9068, at+jwt, org-reference-mapper, fhir-context-mapper, ecosystem_audience, ecosystem-audience-mapper, included_custom_audience, ADR 0003]
+recap: "Terraform structure and pitfalls — hospital YAML-driven client generation, constant ecosystem aud mapper, extra_config double-nesting trap, Vault secrets, apply commands, and the opt-in L1 debug client path."
+keywords: [keycloak/keycloak ~>5.0, extra_config, attributes prefix, double-nesting, jwks.url, use.jwks.url, clients.tf, scopes.tf, realm.tf, yamldecode, local.hospitals, local.hospitals_l1, TF_VAR_keycloak_url, keycloak-config, apply command, for_each, config/hospitals, config/hospitals-l1, org_id, org_display_name, org_reference, jwks_url, vault, vault_kv_secret_v2, admin_password, JWT OIDC, client-id-mapper, client_id claim, RFC 9068, access.token.header.type.rfc9068, at+jwt, org-reference-mapper, fhir-context-mapper, ecosystem_audience, ecosystem-audience-mapper, included_custom_audience, auth_level, m2m_l1, ADR 0003, ADR 0004]
 ---
 
 # Terraform
@@ -39,6 +39,10 @@ jwks_url: "https://hospital-b.example/.well-known/jwks.json"
 ```
 
 Adding a hospital = one new YAML file + `terraform apply`. No HCL changes needed. There is no per-hospital allow-list — [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) removed the `allowed_clients` field along with the target-specific `aud:{org_id}` scope mechanism it used to gate.
+
+## Optional L1 debug client (`config/hospitals-l1/`)
+
+Reads `config/hospitals-l1/*.yaml` into `local.hospitals_l1`, independent of `local.hospitals`. For each entry, creates `keycloak_openid_client.m2m_l1["{org_id}"]` with `client_id = "{org_id}--l1"`, `client_authenticator_type = "client-secret"` (Keycloak-generated secret, surfaced via the `m2m_l1_client_secrets` sensitive output), and the same mapper set as the L2 client including its own `auth-level-mapper` hardcoded to `"L1"`. The primary L2 client gets the same mapper hardcoded to `"L2"` — `auth_level` is a required claim on every M2M client, not implied by absence; see [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md) (superseding the [ADR 0001](../docs/adr/0001-defer-auth-level-claim.md) deferral) and [config-model.md](config-model.md).
 
 ## scopes.tf — SMART optional scopes
 

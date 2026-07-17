@@ -41,9 +41,11 @@ Architecture decisions: [`docs/adr/`](docs/adr/).
 
 `~/github/umzhconnect/umzhconnect-ig/input/pagecontent/security.md` and `security-implementation.md` are the normative source. This repo's realm must remain a drop-in replacement for `umzhconnect-sandbox`. When in doubt, check the sandbox realm export.
 
-### Production is L2 only — never propose L1 as production config
+### Production default is L2 — L1 only as an explicit opt-in debug client
 
-`client_secret` is banned from production. All production clients authenticate with `private_key_jwt`. Never include L1 in production proposals, never suggest it as a migration path or fallback.
+`private_key_jwt` (L2) is the default and the only client provisioned automatically. `client_secret` (L1) is banned as a default, primary, or fallback production client — never propose it as the general path.
+
+The one exception: [ADR 0004](docs/adr/0004-reinstate-l1-debug-client.md) reinstates L1 as an explicit, per-hospital **opt-in debug client** (`{org_id}--l1`, provisioned only via a deliberate `config/hospitals-l1/{org_id}.yaml` file), requested by hospitals for firewall/connectivity debugging that's harder to isolate through L2's signed-assertion flow. This is narrow and tracked, not a general reopening of L1 — don't propose L1 for anything beyond this debug path without checking ADR 0004 first.
 
 ### Terraform `extra_config` — no `attributes.` prefix
 
