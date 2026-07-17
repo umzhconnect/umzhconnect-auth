@@ -30,6 +30,7 @@ Read the relevant doc before making changes. The frontmatter `keywords` field is
 | [ai-docs/aud-rfc-backing.md](ai-docs/aud-rfc-backing.md) | RFC standards analysis for the aud claim (RFC 7519, 9068, 8707) |
 | [ai-docs/open-gaps.md](ai-docs/open-gaps.md) | Prioritized action list |
 | [ai-docs/umzh-connect-gitops.md](ai-docs/umzh-connect-gitops.md) | Dev k8s/ArgoCD deployment — repo split across tch-umzh-connect-gitops and tch-syseng-argocd-gitops, image-baked config hand-off |
+| [ai-docs/argocd-template.md](ai-docs/argocd-template.md) | `argocd-template/` — sample ArgoCD manifests (Keycloak + configurator job only) |
 
 Architecture decisions: [`docs/adr/`](docs/adr/).
 
@@ -79,6 +80,7 @@ Update the relevant doc whenever you change the corresponding code.
 | `bruno/**` | [ai-docs/bruno.md](ai-docs/bruno.md) |
 | Audience / `aud` design decisions | [ai-docs/aud-design.md](ai-docs/aud-design.md) and add an ADR under `docs/adr/` |
 | Any item in the open gaps list | [ai-docs/open-gaps.md](ai-docs/open-gaps.md) — mark resolved and move to "Resolved" |
+| `argocd-template/**` | [ai-docs/argocd-template.md](ai-docs/argocd-template.md) |
 
 Keep `keywords` in each doc's frontmatter in sync with the actual symbols and file paths after a change — stale keywords defeat the lookup purpose.
 

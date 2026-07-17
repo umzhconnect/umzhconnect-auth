@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - regcred.yaml
+  - keycloak-admin-secret.yaml
+  - database.yaml
+  - keycloak.yaml
+  - keycloak-config-job.yaml
+configMapGenerator:
+  - name: example-app-config
+    files:
+      - keycloak_config/scopes.yaml
+      - keycloak_config/example-client.yaml
+    options:
+      disableNameSuffixHash: true
+# argocd-image-updater (write-back-target: kustomization) rewrites the tags
+# below in-place once new images land in your registry - base manifests
+# intentionally reference bare image names with no tag/digest here.
+images:
+  - name: ghcr.io/example-org/example-app-keycloak
+  - name: ghcr.io/example-org/example-app-tf-config
