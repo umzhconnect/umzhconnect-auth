@@ -1,0 +1,16 @@
+# Example realm client scopes, read by Terraform to:
+#   1. Create each scope as a keycloak_openid_client_scope resource.
+#   2. Assign default_scopes as the default client scopes on every M2M client
+#      - i.e. always included in issued tokens without the caller requesting them.
+#   3. Register optional_scopes in KC so callers may request them explicitly
+#      via the `scope` parameter; they are not included by default.
+
+default_scopes:
+  - name: "example/Resource.r"
+    description: "Example scope: read Resource"
+  - name: "example/Resource.cru"
+    description: "Example scope: create/read/update Resource"
+
+optional_scopes:
+  - name: "example-optional-read"
+    description: "Example optional scope: read additional data"

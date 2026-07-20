@@ -1,0 +1,25 @@
+# Pulls the GHCR image-pull secret from Vault via external-secrets so the
+# Deployment/Job below can pull private images. Swap secretStoreRef / remoteRef
+# for whatever secrets backend your cluster uses (or a plain `kubernetes.io/
+# dockerconfigjson` Secret if you don't need rotation).
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: regcred
+  namespace: example-app
+spec:
+  refreshInterval: "15s"
+  secretStoreRef:
+    name: example-vault
+    kind: ClusterSecretStore
+  target:
+    name: regcred
+    template:
+      type: kubernetes.io/dockerconfigjson
+      data:
+        .dockerconfigjson: "{{ .DOCKER_REGCRED | toString }}"
+  data:
+    - secretKey: DOCKER_REGCRED
+      remoteRef:
+        key: ops/example-app/dev
+        property: DOCKER_REGCRED

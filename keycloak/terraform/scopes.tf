@@ -56,3 +56,28 @@ resource "keycloak_openid_client_optional_scopes" "m2m" {
 
   depends_on = [keycloak_openid_client_scope.smart]
 }
+
+# Same default/optional scope assignment for L1 debug clients (ADR 0004) —
+# a debug client should be a faithful stand-in for the real integration.
+
+resource "keycloak_openid_client_default_scopes" "m2m_l1" {
+  for_each = local.hospitals_l1
+
+  realm_id  = keycloak_realm.umzh_connect.id
+  client_id = keycloak_openid_client.m2m_l1[each.key].id
+
+  default_scopes = [for s in local._scopes_config.default_scopes : s.name]
+
+  depends_on = [keycloak_openid_client_scope.smart]
+}
+
+resource "keycloak_openid_client_optional_scopes" "m2m_l1" {
+  for_each = local.hospitals_l1
+
+  realm_id  = keycloak_realm.umzh_connect.id
+  client_id = keycloak_openid_client.m2m_l1[each.key].id
+
+  optional_scopes = [for s in local._scopes_config.optional_scopes : s.name]
+
+  depends_on = [keycloak_openid_client_scope.smart]
+}

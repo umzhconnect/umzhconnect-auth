@@ -1,0 +1,96 @@
+# One-shot Terraform apply against the running Keycloak. Runs as an ArgoCD
+# PostSync hook so it re-applies after every sync, once Keycloak is reachable.
+#
+# Terraform files are baked into a "tf-config" image at /src (built from your
+# own Dockerfile: FROM hashicorp/terraform:<pin>, COPY <your realm terraform>
+# /src/terraform). Client/scope config, by contrast, is injected via a
+# kustomize configMapGenerator (see kustomization.yaml) mounted flat at
+# /config - kept out of the image so client onboarding doesn't require a
+# rebuild. Terraform state must still survive Job re-runs (otherwise every
+# sync would try to re-create an already-existing realm), so both sources are
+# copied onto a persistent workspace volume on every start, and only the
+# tfstate there is kept across runs.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tf-workspace
+  namespace: example-app
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  storageClassName: default
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: keycloak-config
+  namespace: example-app
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    # BeforeHookCreation must be included explicitly - specifying hook-delete-policy
+    # replaces ArgoCD's default (BeforeHookCreation) rather than adding to it. Without
+    # it, a failed Job (e.g. transient Keycloak unavailability during a sync) would
+    # persist, and the next sync's identical-spec Job creation would be a no-op against
+    # the existing failed Job - terraform would never re-run.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: regcred
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: terraform-apply
+          image: ghcr.io/example-org/example-app-tf-config
+          workingDir: /workspace/terraform
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p /workspace/terraform /workspace/config
+              cp -rf /src/terraform/. /workspace/terraform/
+              cp -rf /config/* /workspace/config/
+              terraform init -input=false
+              terraform apply -auto-approve -input=false
+          env:
+            - name: TF_VAR_keycloak_url
+              value: http://keycloak:8080
+            - name: TF_VAR_keycloak_admin_username
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: admin-username
+            - name: TF_VAR_keycloak_admin_password
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: admin-password
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: tmp
+              mountPath: /tmp
+            - name: example-app-config
+              mountPath: /config
+      volumes:
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: tf-workspace
+        - name: tmp
+          emptyDir: {}
+        - name: example-app-config
+          configMap:
+            name: example-app-config

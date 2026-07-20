@@ -1,0 +1,32 @@
+# Zalando postgres-operator CR. The operator auto-creates a credentials Secret
+# named "keycloak.example-app-db.credentials.postgresql.acid.zalan.do" with
+# `username`/`password` keys, referenced directly by the keycloak Deployment
+# (see keycloak.yaml) - no manual secret handling needed.
+apiVersion: "acid.zalan.do/v1"
+kind: postgresql
+metadata:
+  name: example-app-db
+  namespace: example-app
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  teamId: "example"
+  volume:
+    size: 5Gi
+  numberOfInstances: 1
+  users:
+    keycloak:
+      - createdb
+  databases:
+    keycloak: keycloak
+  # https://github.com/zalando/postgres-operator/blob/master/docs/user.md
+  preparedDatabases:
+    keycloak:
+      defaultUsers: false
+      schemas:
+        public:
+          defaultRoles: false
+  postgresql:
+    version: "16"
+    parameters:
+      password_encryption: scram-sha-256

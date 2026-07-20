@@ -1,6 +1,6 @@
 # 0001 — Defer `auth_level` claim until L3 is introduced
 
-**Status:** Accepted  
+**Status:** Superseded by [0004](0004-reinstate-l1-debug-client.md)
 **Date:** 2026-06-19  
 **Authors:** Trifork
 
@@ -44,3 +44,13 @@ When L3 is introduced, the claim will be added at that point. Because the claim 
 ## Revisit when
 
 L3 (`private_key_jwt` + mTLS or DPoP) client onboarding begins.
+
+---
+
+## Superseded
+
+[ADR 0004](0004-reinstate-l1-debug-client.md) reinstates L1 (`client_secret`)
+as an opt-in per-hospital debug client. This deferral's premise — "only one
+level in use, so the claim carries no distinguishing information" — no
+longer holds once L1 and L2 clients coexist, so the `auth_level` claim is
+now implemented as described in ADR 0004.
