@@ -27,8 +27,7 @@ Everything in this document follows two invariants:
 Architecture references: [ADR 0002 — one client per
 hospital](../adr/0002-one-client-per-hospital.md), [ADR 0003 — constant
 ecosystem `aud`](../adr/0003-constant-ecosystem-audience.md), [ADR 0004 —
-reinstate L1 as a debug client](../adr/0004-reinstate-l1-debug-client.md),
-[ai-docs/config-model.md](../../ai-docs/config-model.md).
+reinstate L1 as a debug client](../adr/0004-reinstate-l1-debug-client.md).
 
 ---
 
@@ -44,7 +43,7 @@ deferral and its revisit condition.
 | "We want a separate client per application" | One client per hospital; all apps of a hospital share one identity. Revisit when the Policy Server arrives | [ADR 0002](../adr/0002-one-client-per-hospital.md) |
 | "Tokens for our FHIR server should only work for us" (per-target `aud`) | `aud` is a constant ecosystem value; target-specific audience binding is deferred until Keycloak supports RFC 8707 non-experimentally | [ADR 0003](../adr/0003-constant-ecosystem-audience.md) |
 | "Only hospitals X and Y should get tokens for our server" (inbound allow-list) | There is no per-hospital allow-list of any kind; FHIR servers are responsible for their own authorization | [ADR 0003](../adr/0003-constant-ecosystem-audience.md) |
-| "Grant scope S only to hospital X" | Scopes are realm-wide: `default_scopes` are assigned to every M2M client, `optional_scopes` are requestable by every client. Per-(caller, target) scope enforcement is a Policy Server concern | [ADR 0002](../adr/0002-one-client-per-hospital.md), [config-model.md](../../ai-docs/config-model.md) |
+| "Grant scope S only to hospital X" | Scopes are realm-wide: `default_scopes` are assigned to every M2M client, `optional_scopes` are requestable by every client. Per-(caller, target) scope enforcement is a Policy Server concern | [ADR 0002](../adr/0002-one-client-per-hospital.md) |
 | "We want mTLS / DPoP (L3)" | L3 is out of scope until specified by the IG; the `auth_level` claim is deferred with it | [ADR 0001](../adr/0001-defer-auth-level-claim.md) |
 
 ---
@@ -53,7 +52,7 @@ deferral and its revisit condition.
 
 ### UC-O0 — Initial setup
 
-The authentication server is stood up for the first time in an environment.
+The authentication server is set up for the first time in an environment.
 All subsequent operations assume this has been completed.
 
 **Actor:** platform operator
@@ -71,9 +70,7 @@ All subsequent operations assume this has been completed.
    generalized sample of these manifests (Deployment, Service, PostSync Job,
    kustomization) — see [argocd-template/README.md](../../argocd-template/README.md)
    for what's included and how to adapt it (namespace, hostnames,
-   secrets-store, image registry). The concrete dev deployment built from
-   this pattern lives in the separate `tch-umzh-connect-gitops` repo; see
-   [ai-docs/umzh-connect-gitops.md](../../ai-docs/umzh-connect-gitops.md).
+   secrets-store, image registry).
 3. The configurator Job creates the realm, scopes, mappers, and one KC client
    per file in `config/hospitals/`. Terraform state must persist across Job
    re-runs (e.g. a PVC, as in the sample's `keycloak-config-job.yaml`) —
@@ -90,8 +87,7 @@ dev-only — production uses `start --optimized`, `ssl_required = "external"`
 in `realm.tf`, and secrets from a vault, not plaintext Secrets.
 
 **Local (docker-compose), for development:** the same steps run against a
-local stack instead of a cluster — see
-[ai-docs/infrastructure.md](../../ai-docs/infrastructure.md).
+local stack instead of a cluster.
 ```sh
 docker compose up -d --build        # builds & starts Keycloak, jwks-server, token-validator
 docker compose up keycloak-config   # applies Terraform (or run it on the host, see below)
@@ -208,7 +204,7 @@ actually reaches a running Keycloak.
 
 | Environment | Mechanism |
 |-------------|-----------|
-| Kubernetes (ArgoCD) | Publish a new `tf-config` image (bakes in `keycloak/terraform` + `keycloak/config`); an image-updater bumps the tag in the gitops manifests, and the ArgoCD `PostSync` Job re-runs `terraform apply` with state persisted on a PVC. See [argocd-template/](../../argocd-template) for the manifest shape and [ai-docs/umzh-connect-gitops.md](../../ai-docs/umzh-connect-gitops.md) for the concrete dev-cluster instance of this pattern (CI workflow names, image-updater config, PVC name) |
+| Kubernetes (ArgoCD) | Publish a new `tf-config` image (bakes in `keycloak/terraform` + `keycloak/config`); an image-updater bumps the tag in the gitops manifests, and the ArgoCD `PostSync` Job re-runs `terraform apply` with state persisted on a PVC. See [argocd-template/](../../argocd-template) for the manifest shape |
 | Local (docker-compose), for development | `docker compose up keycloak-config`, or `terraform -chdir=keycloak/terraform apply` with `TF_VAR_keycloak_url=http://localhost:8180` |
 | Production | Not yet stood up — the delivery target is a config snapshot for `umzhconnect/umzhconnect-auth` (pending) |
 
@@ -359,10 +355,8 @@ change, or base-image CVE patch).
    re-evaluating the `aud` design on every KC version bump.
 3. Rebuild and test: `docker compose build keycloak` locally, then run the
    Bruno collection and token-validator checks against the new image.
-4. Publish the image; the Kubernetes deployment's image-updater (see
-   [ai-docs/umzh-connect-gitops.md](../../ai-docs/umzh-connect-gitops.md) for
-   the dev-cluster instance — `ci-keycloak.yml` / `argocd-image-updater`)
-   picks up the new tag and rolls it out.
+4. Publish the image; the Kubernetes deployment's image-updater picks up the
+   new tag and rolls it out.
 5. If the Terraform provider version also changed, run `terraform apply` after
    the new instance is healthy.
 

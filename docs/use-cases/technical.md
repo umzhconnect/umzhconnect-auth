@@ -11,7 +11,7 @@ debugging only, never a production integration path.
 
 These are the reference behaviors an operator can point a customer at when
 debugging integration issues. Most have executable counterparts in the Bruno
-collection (`bruno/` — see [ai-docs/bruno.md](../../ai-docs/bruno.md)).
+collection (`bruno/`).
 
 ---
 
@@ -73,8 +73,7 @@ authorization_details=[{"type":"umzh-connect-context","identifier":"ServiceReque
 ```
 The `FhirContextMapper` reads the raw request parameter directly (not via
 Keycloak's `AuthorizationRequestContext`, which is not populated for
-`client_credentials` with custom `authorization_details` types on KC 26.x) —
-see [ai-docs/mapper.md](../../ai-docs/mapper.md).
+`client_credentials` with custom `authorization_details` types on KC 26.x).
 
 Bruno: `auth/05-get-placer-token-context.bru`, `auth/08-get-fulfiller-token-context.bru`.
 
@@ -319,11 +318,10 @@ A client sends syntactically invalid `authorization_details`, or an unknown
 
 **Current behavior:** the `FhirContextMapper` ignores it and issues a token
 **without** `fhirContext` — no error is returned, and parse failures are
-swallowed silently (open gap: `FhirContextMapper` should log at WARN — see
-[ai-docs/open-gaps.md](../../ai-docs/open-gaps.md) #2). Operationally: a
-customer reporting "my token has no fhirContext" most likely has a malformed
-or mistyped `authorization_details` parameter — the type must be exactly
-`umzh-connect-context`.
+swallowed silently (known gap: `FhirContextMapper` should log at WARN, but
+doesn't yet). Operationally: a customer reporting "my token has no
+fhirContext" most likely has a malformed or mistyped `authorization_details`
+parameter — the type must be exactly `umzh-connect-context`.
 
 Bruno: `negative/08-unknown-context-type.bru`.
 
@@ -353,5 +351,4 @@ debug client, if one has been provisioned
 Bruno: `negative/09-unsupported-grant-type.bru`, `negative/01-wrong-secret.bru`.
 
 (The `web-app` PKCE client and demo users in the sandbox config are dev-only
-and must be removed/gated for production — see
-[ai-docs/realm-contract.md](../../ai-docs/realm-contract.md).)
+and must be removed/gated for production.)
