@@ -7,39 +7,13 @@ keywords: [Bruno, QuickJS, Node.js sandbox, unsafe, --sandbox unsafe, Developer 
 
 Open `bruno/` in Bruno and select the `local` environment.
 
-## Structure
-
-| Folder | Requests |
-|--------|----------|
-| `auth/` | Discovery, JWKS, L2 tokens (placer/fulfiller), context tokens (placer+fulfiller with `authorization_details`) |
-| `validation/` | Health check, validate token, mock FHIR endpoints, context token claims inspection |
-| `negative/` | Wrong secret, garbage token, missing scope, context gate without context, expired assertion, wrong assertion `aud`, unknown `authorization_details` type, unsupported grant type |
-
-Suggested order: `auth/` → `validation/` → `negative/`.
-
-### auth/ sequence
-
-| File | What it tests |
-|------|---------------|
-| `01-discovery.bru` | OIDC discovery endpoint |
-| `02-jwks.bru` | AS public key set |
-| `05-get-placer-token-context.bru` | Placer L2 + RFC 9396 `authorization_details` → `fhirContext` |
-| `06-get-placer-token-l2.bru` | Placer L2 token request |
-| `07-get-fulfiller-token-l2.bru` | Fulfiller L2 token request |
-| `08-get-fulfiller-token-context.bru` | Canonical IG example: fulfiller L2 + `authorization_details` |
-
-### negative/ sequence
-
-| File | Behaviour exercised |
-|------|---------------------|
-| `01-wrong-secret.bru` | `client_secret` against L2 client → 400 |
-| `02-validate-garbage-token.bru` | Malformed token at `/validate` → 422 |
-| `03-missing-scope.bru` | Default scope present (positive case of default scope) |
-| `04-context-gate-without-context.bru` | L2 token without `fhirContext` → 403 on context-gated resource |
-| `06-expired-client-assertion.bru` | Client assertion with `exp` in the past → 400 (RFC 7523 §3) |
-| `07-wrong-assertion-aud.bru` | Client assertion `aud` pointing to wrong endpoint → 400 |
-| `08-unknown-context-type.bru` | `authorization_details` with unknown type → token issued, no `fhirContext` |
-| `09-unsupported-grant-type.bru` | `authorization_code` grant (IG is M2M only) → 400 |
+Every request has a `docs` block (visible in Bruno's right-hand panel, and
+in `bru run` output) explaining what it does and why. The collection root
+and each folder (`auth/`, `validation/`, `negative/`) also carry their own
+`docs` block (collection/folder settings → Docs tab) with the structure
+overview and per-folder purpose — that's the authoritative human-facing
+reference now; this file only covers what doesn't fit there (sandbox setup
+mechanics, environment variable gotchas).
 
 ## L2 sandbox mode — required
 

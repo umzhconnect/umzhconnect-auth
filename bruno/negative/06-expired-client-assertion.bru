@@ -19,13 +19,9 @@ body:form-urlencoded {
 }
 
 docs {
-  Presents a syntactically valid private_key_jwt assertion whose exp
-  claim is in the past (now - 300 s). The AS must reject it because the
-  assertion has already expired — this is a mandatory check defined in
-  RFC 7523 §3 and required by SMART Backend Services.
+  Presents a syntactically valid private_key_jwt assertion whose exp claim is in the past (now - 300 s). The AS must reject it because the assertion has already expired — this is a mandatory check defined in RFC 7523 §3 and required by SMART Backend Services.
 
-  The IG specifies: exp must be short-lived (≤ 5 min per SMART).
-  Once exp has passed, the assertion is unusable regardless of signature.
+  The IG specifies: exp must be short-lived (≤ 5 min per SMART). Once exp has passed, the assertion is unusable regardless of signature.
 
   Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }

@@ -15,11 +15,7 @@ auth:bearer {
 }
 
 docs {
-  system/Organization.r is a default scope on all hospital M2M clients
-  (scopes.yaml), so hospital-a's token includes it and the read succeeds.
-  This request formerly expected 403 when scopes were per-client; it now
-  verifies the opposite: default scopes are present and enforced correctly.
-  Run auth/06 first to obtain placerL2Token.
+  system/Organization.r is a default scope on all hospital M2M clients (scopes.yaml), so hospital-a's token includes it and the read succeeds. This request formerly expected 403 when scopes were per-client; it now verifies the opposite: default scopes are present and enforced correctly. Run auth/06 first to obtain placerL2Token.
 }
 
 assert {

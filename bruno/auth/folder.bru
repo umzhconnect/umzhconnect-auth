@@ -1,0 +1,11 @@
+meta {
+  name: auth
+}
+
+docs {
+  Token acquisition requests: OIDC discovery and JWKS (sanity checks that the realm is up and its signing keys are published), then L2 `private_key_jwt` token requests for both demo hospitals (placer/hospital-a, fulfiller/hospital-b), with and without an RFC 9396 `authorization_details` parameter binding the token to a specific FHIR resource (`fhirContext`).
+  
+  Run this folder first — `validation/` and `negative/` reuse the tokens these requests store in environment variables (`placerL2Token`, `fulfillerL2Token`, `placerContextToken`, `fulfillerContextToken`).
+  
+  Requires Bruno's Node.js sandbox ("Developer mode" / `--sandbox unsafe`) for the L2 requests' client-assertion signing scripts — see `ai-docs/bruno.md`.
+}

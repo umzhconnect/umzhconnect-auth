@@ -19,15 +19,9 @@ body:form-urlencoded {
 }
 
 docs {
-  Presents a valid private_key_jwt assertion where aud points to a
-  different endpoint ("https://wrong.example.com/token") rather than
-  this realm's token endpoint. The AS must reject it.
+  Presents a valid private_key_jwt assertion where aud points to a different endpoint ("https://wrong.example.com/token") rather than this realm's token endpoint. The AS must reject it.
 
-  RFC 7523 §3 requires: "The Authorization Server MUST reject any token
-  whose aud claim does not contain a value identifying it as an intended
-  audience." SMART Backend Services repeats this: aud MUST be the token
-  endpoint URL. The check pins the assertion to exactly one AS — a client
-  cannot reuse an assertion generated for a different server.
+  RFC 7523 §3 requires: "The Authorization Server MUST reject any token whose aud claim does not contain a value identifying it as an intended audience." SMART Backend Services repeats this: aud MUST be the token endpoint URL. The check pins the assertion to exactly one AS — a client cannot reuse an assertion generated for a different server.
 
   Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }
