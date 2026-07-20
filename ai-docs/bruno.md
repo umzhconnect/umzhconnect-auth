@@ -1,6 +1,6 @@
 ---
 recap: "Bruno collection structure and the mandatory Node.js sandbox switch for L2 requests — QuickJS lacks crypto/fs/path."
-keywords: [Bruno, QuickJS, Node.js sandbox, unsafe, --sandbox unsafe, Developer mode, green shield, l2KeysDir, crypto module, fs module, path module, pre-request scripts, bru run, local environment, private_key_jwt, RFC 7523, L1, client_secret, placerL1ClientId, placerL1ClientSecret, m2m_l1_client_secrets, ADR 0004]
+keywords: [Bruno, QuickJS, Node.js sandbox, unsafe, --sandbox unsafe, Developer mode, green shield, l2KeysDir, crypto module, fs module, path module, pre-request scripts, bru run, local environment, private_key_jwt, RFC 7523, L1, client_secret, placerL1ClientId, placerL1ClientSecret, m2m_l1_client_secrets, ADR 0004, docs block, docs tab, folder docs, collection docs]
 ---
 
 # Bruno collection
@@ -42,3 +42,18 @@ If Bruno cannot resolve the demo key path, set the `l2KeysDir` variable in `brun
 ## L1 debug token (`09-get-placer-token-l1.bru`)
 
 Exercises the opt-in L1 (`client_secret`) debug client from [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md) — not the production path (see CLAUDE.md's "Production default is L2" rule). Needs `keycloak/config/hospitals-l1/hospital-a.yaml` to exist and `terraform apply` to have run; the client secret is Keycloak-generated (not a demo key in this repo), so fetch it with `terraform output -json m2m_l1_client_secrets` and set `placerL1ClientSecret` in the `local` environment. Unlike the L2 requests, no pre-request signing script is needed, so it works in either Bruno sandbox.
+
+## Keep `docs` blocks in sync
+
+The `docs` blocks are the authoritative human-facing reference for the collection (see above) — they live in the `.bru` files, not in this doc, so they don't update themselves.
+
+Whenever you edit the collection, update the relevant `docs` block in the same change:
+
+- **Add/remove/rename a request** — update the owning folder's `docs` block (structure overview) and add/update that request's own `docs` block explaining what it does and why.
+- **Change a request's behavior** (params, body, pre-request script, expected status/assertions) — update that request's `docs` block so it still matches what the request actually does.
+- **Add/remove a folder** — update the collection root's `docs` block (structure overview) in the collection settings → Docs tab.
+- **Change sandbox/environment requirements** (e.g. a new request needs `--sandbox unsafe`, or a new env variable) — update this file (`ai-docs/bruno.md`) too, since it covers mechanics that don't fit in a single request's `docs` block.
+
+Edit `docs` blocks via Bruno's UI (request/folder/collection settings → Docs tab) or directly in the `.bru` file's `docs { ... }` block — either is fine, but don't let the two drift.
+
+Bruno's built-in md renderer currently treats every `\n` as a new paragraph (no soft-wrap within a paragraph) — avoid unnecessary `\n` inside `docs` blocks, or lines that should read as one flowing paragraph will render as separate, oddly-spaced ones.
