@@ -1,0 +1,41 @@
+docs {
+  UMZH Connect Auth Server — Bruno collection.
+  
+  Exercises the realm from a caller's perspective: acquiring tokens (L2 `private_key_jwt`, with and without RFC 9396 FHIR context), presenting them to a mock resource server (token-validator), and confirming that rejected/edge-case requests behave the way the IG and the relevant RFCs require.
+  
+  | Folder | Requests |
+  |--------|----------|
+  | `auth/` | Discovery, JWKS, L2 tokens (placer/fulfiller), context tokens (placer+fulfiller with `authorization_details`) |
+  | `validation/` | Health check, validate token, mock FHIR endpoints, context token claims inspection |
+  | `negative/` | Wrong secret, garbage token, missing scope, context gate without context, expired assertion, wrong assertion `aud`, unknown `authorization_details` type, unsupported grant type |
+  
+  Suggested order: `auth/` → `validation/` → `negative/`. See each folder's own docs (folder settings → Docs) and each request's docs block for specifics.
+  
+  ### auth/ sequence
+  
+  | File | What it tests |
+  |------|---------------|
+  | `01-discovery.bru` | OIDC discovery endpoint |
+  | `02-jwks.bru` | AS public key set |
+  | `05-get-placer-token-context.bru` | Placer L2 + RFC 9396 `authorization_details` → `fhirContext` |
+  | `06-get-placer-token-l2.bru` | Placer L2 token request |
+  | `07-get-fulfiller-token-l2.bru` | Fulfiller L2 token request |
+  | `08-get-fulfiller-token-context.bru` | Canonical IG example: fulfiller L2 + `authorization_details` |
+  
+  ### negative/ sequence
+  
+  | File | Behaviour exercised |
+  |------|---------------------|
+  | `01-wrong-secret.bru` | `client_secret` against L2 client → 400 |
+  | `02-validate-garbage-token.bru` | Malformed token at `/validate` → 422 |
+  | `03-missing-scope.bru` | Default scope present (positive case of default scope) |
+  | `04-context-gate-without-context.bru` | L2 token without `fhirContext` → 403 on context-gated resource |
+  | `06-expired-client-assertion.bru` | Client assertion with `exp` in the past → 400 (RFC 7523 §3) |
+  | `07-wrong-assertion-aud.bru` | Client assertion `aud` pointing to wrong endpoint → 400 |
+  | `08-unknown-context-type.bru` | `authorization_details` with unknown type → token issued, no `fhirContext` |
+  | `09-unsupported-grant-type.bru` | `authorization_code` grant (IG is M2M only) → 400 |
+
+  ## Notes
+  
+  L2 requests sign a client assertion locally using Node's `crypto`/`fs`/ `path` modules, which Bruno's default QuickJS sandbox does not expose — switch to the Node.js sandbox first: pass `--sandbox unsafe` on the CLI, or enable "Developer mode" via the green shield icon in the desktop app. See `ai-docs/bruno.md` for full sandbox-mode and environment setup.
+}

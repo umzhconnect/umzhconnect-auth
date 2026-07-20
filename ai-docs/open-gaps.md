@@ -13,16 +13,15 @@ From the 2026-06-16 meeting, updated through 2026-06-24.
 
 2. **Add WARN logging to `FhirContextMapper`** — `FhirContextMapper.java:98` silently swallows parse errors; a client sending malformed `authorization_details` gets a token with no `fhirContext` instead of any error. Log the parse exception at WARN level.
 
-3. **Document onboarding runbook** — what a new hospital registration requires (`config/hospitals/` entry, who approves, how `terraform apply` is triggered). Document for non-engineers.
+3. **Confirm `tenant` claim with UMZH** — `tenant-mapper` adds a `tenant` claim (`placer`/`fulfiller`) to every access token. It is a sandbox routing hint, not in the IG spec. Confirm with UMZH whether to retain or drop.
 
-4. **Confirm `tenant` claim with UMZH** — `tenant-mapper` adds a `tenant` claim (`placer`/`fulfiller`) to every access token. It is a sandbox routing hint, not in the IG spec. Confirm with UMZH whether to retain or drop.
+4. **Confirm scope of placer/fulfiller distinction** — the IG defines `placer` and `fulfiller` roles for the referral workflow specifically. It is not yet confirmed whether all UMZH Connect M2M use cases follow this model (e.g. lab result retrieval, imaging, medication lookups may not map cleanly). If the distinction applies only to the referral workflow, the `role` claim should be scoped accordingly. Resolve together with #3.
 
-5. **Confirm scope of placer/fulfiller distinction** — the IG defines `placer` and `fulfiller` roles for the referral workflow specifically. It is not yet confirmed whether all UMZH Connect M2M use cases follow this model (e.g. lab result retrieval, imaging, medication lookups may not map cleanly). If the distinction applies only to the referral workflow, the `role` claim should be scoped accordingly. Resolve together with #4.
-
-6. **Production hardening** — `ssl_required = "none"` in `realm.tf:11` (must be `external` or `all`); `start-dev` in `docker-compose.yml` disables all production hardening — document clearly as dev-only.
+5. **Production hardening** — `ssl_required = "none"` in `realm.tf:11` (must be `external` or `all`); `start-dev` in `docker-compose.yml` disables all production hardening — document clearly as dev-only.
 
 ## Resolved
 
+- Onboarding runbook: documented as operator use cases in [docs/use-cases/](../docs/use-cases/operational.md) — onboarding, config changes, lifecycle, incident response, plus the technical reference behaviors in [technical.md](../docs/use-cases/technical.md).
 - `authorization_details` → `fhirContext` mapping: current implementation is correct. `FhirContextMapper` reads the raw request parameter and maps it into the AS-signed JWT. No design change needed.
 - L1/L2/L3 direction: L2 is the default and only client provisioned automatically; L3 out of scope. **Superseded in part by [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md) (2026-07-16):** L1 is reinstated as an explicit, per-hospital opt-in debug client (`config/hospitals-l1/{org_id}.yaml` → `{org_id}--l1`), requested by USZ and Balgrist for firewall/connectivity debugging. No upgrade path between levels is still needed — a hospital's L1 and L2 clients are independent.
 - Onboarding approach: Terraform, reproducible, VCS-based.

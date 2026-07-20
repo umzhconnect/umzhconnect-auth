@@ -10,6 +10,10 @@ get {
   auth: none
 }
 
+docs {
+  Sanity check that the mock token-validator resource server is up before running the rest of the `validation/` and `negative/` requests that depend on it.
+}
+
 assert {
   res.status: eq 200
   res.body.status: eq ok

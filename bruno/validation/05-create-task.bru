@@ -23,6 +23,10 @@ body:json {
   }
 }
 
+docs {
+  Uses the Placer's L2 token (auth/06) to create a Task, exercising a write scope (`system/Task.cru`) rather than the read scopes used elsewhere in `validation/`. Confirms the validator enforces write permissions per-scope, not just read access. Run auth/06 first.
+}
+
 assert {
   res.status: eq 201
   res.body.resourceType: eq Task

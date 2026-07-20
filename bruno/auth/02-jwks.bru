@@ -14,3 +14,7 @@ assert {
   res.status: eq 200
   res.body.keys: isDefined
 }
+
+docs {
+  Fetches the AS's own public key set — what resource servers use to verify the signature on every access token it issues. Sanity-checks that the JWKS endpoint is up and returns at least one key.
+}

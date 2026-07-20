@@ -32,7 +32,7 @@ Read the relevant doc before making changes. The frontmatter `keywords` field is
 | [ai-docs/umzh-connect-gitops.md](ai-docs/umzh-connect-gitops.md) | Dev k8s/ArgoCD deployment — repo split across tch-umzh-connect-gitops and tch-syseng-argocd-gitops, image-baked config hand-off |
 | [ai-docs/argocd-template.md](ai-docs/argocd-template.md) | `argocd-template/` — sample ArgoCD manifests (Keycloak + configurator job only) |
 
-Architecture decisions: [`docs/adr/`](docs/adr/).
+Architecture decisions: [`docs/adr/`](docs/adr/). Operator runbook / use cases: [`docs/use-cases/`](docs/use-cases/).
 
 ---
 

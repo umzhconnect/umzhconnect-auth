@@ -18,6 +18,12 @@ body:form-urlencoded {
   scope: system/Task.cru system/ServiceRequest.r system/Patient.r
 }
 
+docs {
+  Same flow as auth/06 but for the Fulfiller (hospital-b) client and its own demo key — establishes that a second, independently-onboarded hospital gets a token with its own `organization_reference`, distinct from the Placer's.
+
+  Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
+}
+
 assert {
   res.status: eq 200
   res.body.access_token: isDefined
