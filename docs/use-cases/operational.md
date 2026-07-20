@@ -11,15 +11,23 @@ Everything in this document follows two invariants:
    `keycloak/config/scopes.yaml`. Never hand-edit the KC admin console — any
    change made there is silently reverted on the next `terraform apply` and is
    lost in disaster recovery ([UC-L5](#uc-l5--disaster-recovery)).
-2. **One KC client per hospital, provisioned explicitly.** A hospital with no
-   `config/hospitals/{org_id}.yaml` file has no KC client and cannot obtain
-   tokens ([ADR 0002](../adr/0002-one-client-per-hospital.md)). All production
-   clients authenticate with `private_key_jwt` (L2); `client_secret` (L1) is
-   banned from production.
+2. **One primary (L2) KC client per hospital, provisioned explicitly.** A
+   hospital with no `config/hospitals/{org_id}.yaml` file has no KC client and
+   cannot obtain tokens ([ADR 0002](../adr/0002-one-client-per-hospital.md)).
+   The primary, production integration path is always `private_key_jwt` (L2).
+   `client_secret` (L1) is **not** a production path — it exists only as an
+   explicit, per-hospital, opt-in **debug client**
+   (`config/hospitals-l1/{org_id}.yaml`, [ADR
+   0004](../adr/0004-reinstate-l1-debug-client.md)) for connectivity
+   troubleshooting, alongside — never instead of — the L2 client. Every
+   token carries a required `extensions.umzhconnect.auth_level` claim
+   (`"L1"`/`"L2"`) so resource servers can identify and reject L1 tokens for
+   real clinical data flows ([UC-R6](technical.md#uc-r6--rs-enforces-a-minimum-auth_level)).
 
 Architecture references: [ADR 0002 — one client per
 hospital](../adr/0002-one-client-per-hospital.md), [ADR 0003 — constant
-ecosystem `aud`](../adr/0003-constant-ecosystem-audience.md),
+ecosystem `aud`](../adr/0003-constant-ecosystem-audience.md), [ADR 0004 —
+reinstate L1 as a debug client](../adr/0004-reinstate-l1-debug-client.md),
 [ai-docs/config-model.md](../../ai-docs/config-model.md).
 
 ---
@@ -32,7 +40,7 @@ deferral and its revisit condition.
 
 | Request | Why it can't be done | Reference |
 |---------|---------------------|-----------|
-| "Give our app a `client_secret`" | L1 is banned from production; all clients are L2 `private_key_jwt` | [CLAUDE.md](../../CLAUDE.md), IG security model |
+| "Give our app a `client_secret`" for production use | `client_secret` (L1) is banned as a production/primary/fallback client; the production path is always L2 `private_key_jwt`. If the ask is really about debugging connectivity, see [UC-O5](#uc-o5--provisioning-an-l1-debug-client) instead | [CLAUDE.md](../../CLAUDE.md), [ADR 0004](../adr/0004-reinstate-l1-debug-client.md), IG security model |
 | "We want a separate client per application" | One client per hospital; all apps of a hospital share one identity. Revisit when the Policy Server arrives | [ADR 0002](../adr/0002-one-client-per-hospital.md) |
 | "Tokens for our FHIR server should only work for us" (per-target `aud`) | `aud` is a constant ecosystem value; target-specific audience binding is deferred until Keycloak supports RFC 8707 non-experimentally | [ADR 0003](../adr/0003-constant-ecosystem-audience.md) |
 | "Only hospitals X and Y should get tokens for our server" (inbound allow-list) | There is no per-hospital allow-list of any kind; FHIR servers are responsible for their own authorization | [ADR 0003](../adr/0003-constant-ecosystem-audience.md) |
@@ -51,43 +59,48 @@ All subsequent operations assume this has been completed.
 **Actor:** platform operator
 **Trigger:** new environment provisioned
 
-**Local / docker-compose:**
-1. Build and start the stack:
-   ```sh
-   docker compose up -d --build
-   ```
-   This builds the custom Keycloak image with the `FhirContextMapper` JAR
-   bundled in, plus the jwks-server and token-validator dev services.
-2. Wait for Keycloak to be healthy (admin console at `http://localhost:8180`).
-3. Apply the Terraform realm configuration:
-   ```sh
-   docker compose up keycloak-config
-   ```
-   Or directly on the host:
-   ```sh
-   TF_VAR_keycloak_url=http://localhost:8180 \
-     terraform -chdir=keycloak/terraform apply
-   ```
-   This creates the realm, scopes, mappers, and one KC client per file in
-   `config/hospitals/`.
-4. Verify: run the Bruno collection (`bru run --env local --sandbox unsafe`
-   inside `bruno/`) or acquire a token manually and POST it to the
+**Kubernetes (ArgoCD) — the deployment path:**
+1. Build and publish the four images this repo produces: `keycloak` (custom
+   image with the `FhirContextMapper` JAR bundled in), `token-validator`,
+   `tf-config` (bakes in `keycloak/terraform` + `keycloak/config`), and
+   `jwks-server`.
+2. Stand up Keycloak, its Postgres database, and a configurator `Job` that
+   runs `terraform apply` against the running instance as an ArgoCD
+   `PostSync` hook, using the config baked into the `tf-config` image.
+   [`argocd-template/`](../../argocd-template) in this repo is a trimmed,
+   generalized sample of these manifests (Deployment, Service, PostSync Job,
+   kustomization) — see [argocd-template/README.md](../../argocd-template/README.md)
+   for what's included and how to adapt it (namespace, hostnames,
+   secrets-store, image registry). The concrete dev deployment built from
+   this pattern lives in the separate `tch-umzh-connect-gitops` repo; see
+   [ai-docs/umzh-connect-gitops.md](../../ai-docs/umzh-connect-gitops.md).
+3. The configurator Job creates the realm, scopes, mappers, and one KC client
+   per file in `config/hospitals/`. Terraform state must persist across Job
+   re-runs (e.g. a PVC, as in the sample's `keycloak-config-job.yaml`) —
+   otherwise every sync re-creates the realm from scratch.
+4. Verify: run the Bruno collection (`bru run --env <your-env> --sandbox
+   unsafe` inside `bruno/`) or acquire a token manually and POST it to the
    token-validator's `/validate`.
-
-**Dev Kubernetes (ArgoCD):** the dev cluster deployment is driven from the
-separate `tch-umzh-connect-gitops` repo; this repo only builds the four images
-(`keycloak`, `token-validator`, `tf-config`, `jwks-server`). Terraform runs as
-an ArgoCD `PostSync` Job using the config baked into the `tf-config` image.
-See [ai-docs/umzh-connect-gitops.md](../../ai-docs/umzh-connect-gitops.md) and
-[UC-O4](#uc-o4--rolling-out-a-config-change-per-environment) for how config
-changes reach that environment.
 
 **Postcondition:** realm `umzh-connect` is live; all configured hospitals can
 authenticate.
 
 **Production note:** `start-dev` disables all Keycloak hardening and is
 dev-only — production uses `start --optimized`, `ssl_required = "external"`
-in `realm.tf`, and secrets from a vault, not `.env`.
+in `realm.tf`, and secrets from a vault, not plaintext Secrets.
+
+**Local (docker-compose), for development:** the same steps run against a
+local stack instead of a cluster — see
+[ai-docs/infrastructure.md](../../ai-docs/infrastructure.md).
+```sh
+docker compose up -d --build        # builds & starts Keycloak, jwks-server, token-validator
+docker compose up keycloak-config   # applies Terraform (or run it on the host, see below)
+```
+Admin console at `http://localhost:8180`. To run Terraform directly on the
+host instead of via the compose service:
+```sh
+TF_VAR_keycloak_url=http://localhost:8180 terraform -chdir=keycloak/terraform apply
+```
 
 ---
 
@@ -195,11 +208,60 @@ actually reaches a running Keycloak.
 
 | Environment | Mechanism |
 |-------------|-----------|
-| Local (docker-compose) | `docker compose up keycloak-config`, or `terraform -chdir=keycloak/terraform apply` with `TF_VAR_keycloak_url=http://localhost:8180` |
-| Dev k8s (ArgoCD) | Trigger the `ci-tf-config.yml` workflow (or let the push trigger run) to publish a new `tf-config` image; `argocd-image-updater` bumps the tag in `tch-umzh-connect-gitops`, and the ArgoCD `PostSync` Job re-runs `terraform apply` with state persisted on the `tf-workspace` PVC. See [ai-docs/umzh-connect-gitops.md](../../ai-docs/umzh-connect-gitops.md) |
+| Kubernetes (ArgoCD) | Publish a new `tf-config` image (bakes in `keycloak/terraform` + `keycloak/config`); an image-updater bumps the tag in the gitops manifests, and the ArgoCD `PostSync` Job re-runs `terraform apply` with state persisted on a PVC. See [argocd-template/](../../argocd-template) for the manifest shape and [ai-docs/umzh-connect-gitops.md](../../ai-docs/umzh-connect-gitops.md) for the concrete dev-cluster instance of this pattern (CI workflow names, image-updater config, PVC name) |
+| Local (docker-compose), for development | `docker compose up keycloak-config`, or `terraform -chdir=keycloak/terraform apply` with `TF_VAR_keycloak_url=http://localhost:8180` |
 | Production | Not yet stood up — the delivery target is a config snapshot for `umzhconnect/umzhconnect-auth` (pending) |
 
 **Postcondition:** the realm in that environment matches VCS.
+
+---
+
+### UC-O5 — Provisioning an L1 debug client
+
+A hospital asks for a `client_secret` to unblock connectivity debugging
+(firewall, proxy, JWKS reachability) that's hard to isolate through L2's
+signed-assertion flow — see [ADR 0004](../adr/0004-reinstate-l1-debug-client.md).
+
+**This is a debug/test aid, not a production integration path.** L1 must
+never be proposed as an alternative to onboarding via L2
+([UC-O1](#uc-o1--onboarding-a-new-hospital)); it exists alongside the L2
+client, not instead of it, and is scoped to troubleshooting — not real
+clinical data flows.
+
+**Actor:** platform operator, on request of the hospital
+**Trigger:** hospital reports L2 connectivity/firewall/JWKS issues it needs
+to isolate
+
+**Steps:**
+1. Confirm the request is genuinely about connectivity debugging, not a way
+   to avoid implementing `private_key_jwt`. If the hospital wants a
+   long-term `client_secret` integration, decline per the "Requests you must
+   decline" table above.
+2. Create `keycloak/config/hospitals-l1/{org_id}.yaml` with
+   `org_display_name`, `org_reference`, and (recommended for traceability)
+   `reason` / `requested_by` / `requested_date` — see [the directory's
+   README](../../keycloak/config/hospitals-l1/README.md) for the field
+   schema. Independent of the L2 file for the same `org_id`: the hospital
+   may have an L1 file, an L2 file, both, or neither, in any order.
+3. PR review and merge.
+4. `terraform apply` — creates KC client `{org_id}--l1` with a
+   Keycloak-generated `client_secret`, `client_credentials` grant, the same
+   default/optional scopes and mapper set as the L2 client (org reference,
+   FHIR context, ecosystem audience), plus `extensions.umzhconnect.auth_level`
+   hardcoded to `"L1"`.
+5. Hand the generated `client_secret` to the hospital (see [ADR
+   0004](../adr/0004-reinstate-l1-debug-client.md) for the relaxed-but-scoped
+   secret-handling exception this client gets — it's still not to be reused
+   as a general credential-handling precedent).
+6. Verify: the hospital acquires a token per [technical.md
+   UC-T8](technical.md#uc-t8--debug-client-acquires-an-l1-token) and confirms
+   `extensions.umzhconnect.auth_level = "L1"`.
+
+**Postcondition:** hospital can obtain L1 debug tokens alongside (or instead
+of, if it hasn't onboarded L2 yet) its L2 client. Revoking L1 access mirrors
+offboarding: delete `config/hospitals-l1/{org_id}.yaml` and `terraform
+apply` — this is independent of, and does not affect, the hospital's L2
+client.
 
 ---
 
@@ -295,10 +357,12 @@ change, or base-image CVE patch).
    check whether `resource-indicators` (RFC 8707) has left experimental status
    — [ADR 0003](../adr/0003-constant-ecosystem-audience.md) requires
    re-evaluating the `aud` design on every KC version bump.
-3. Rebuild and test locally: `docker compose build keycloak`, then run the
+3. Rebuild and test: `docker compose build keycloak` locally, then run the
    Bruno collection and token-validator checks against the new image.
-4. Publish via `ci-keycloak.yml` (dev k8s picks it up through
-   `argocd-image-updater`).
+4. Publish the image; the Kubernetes deployment's image-updater (see
+   [ai-docs/umzh-connect-gitops.md](../../ai-docs/umzh-connect-gitops.md) for
+   the dev-cluster instance — `ci-keycloak.yml` / `argocd-image-updater`)
+   picks up the new tag and rolls it out.
 5. If the Terraform provider version also changed, run `terraform apply` after
    the new instance is healthy.
 
@@ -325,8 +389,9 @@ The Keycloak database or the Terraform state is lost.
 a live realm — Terraform would try to recreate everything and Keycloak rejects
 the duplicates.
 
-In the dev k8s environment the state lives on the `tf-workspace` PVC; losing
-that PVC is the state-loss case above.
+In a Kubernetes deployment the state typically lives on the configurator
+Job's PVC (see [argocd-template/](../../argocd-template)`keycloak-config-job.yaml`);
+losing that PVC is the state-loss case above.
 
 **Postcondition:** realm restored to the state described in VCS.
 

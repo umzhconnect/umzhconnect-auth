@@ -2,9 +2,12 @@
 
 Use cases relevant to calling hospitals (their applications) and resource
 servers (FHIR servers). Covers token acquisition, token validation, and
-security/adversarial scenarios under the current architecture: one KC client
-per hospital ([ADR 0002](../adr/0002-one-client-per-hospital.md)), constant
-ecosystem `aud` ([ADR 0003](../adr/0003-constant-ecosystem-audience.md)).
+security/adversarial scenarios under the current architecture: one primary
+KC client per hospital ([ADR 0002](../adr/0002-one-client-per-hospital.md)),
+constant ecosystem `aud` ([ADR 0003](../adr/0003-constant-ecosystem-audience.md)),
+and an optional per-hospital L1 debug client alongside it ([ADR
+0004](../adr/0004-reinstate-l1-debug-client.md)) — L1 is for connectivity
+debugging only, never a production integration path.
 
 These are the reference behaviors an operator can point a customer at when
 debugging integration issues. Most have executable counterparts in the Bruno
@@ -47,6 +50,7 @@ realm token endpoint (RFC 7523 §3).
 | payload | `client_id` | `{org_id}` (RFC 9068 §2.2; hardcoded mapper, distinct from `azp`) |
 | payload | `scope` | all `default_scopes` from `config/scopes.yaml` (no `scope` parameter needed) |
 | payload | `extensions.umzhconnect.organization_reference` | the hospital's `org_reference` — set by the AS, never by the caller |
+| payload | `extensions.umzhconnect.auth_level` | `"L2"` — hardcoded, required on every token ([ADR 0004](../adr/0004-reinstate-l1-debug-client.md)); resource servers use this to distinguish L2 from an L1 debug token ([UC-T8](#uc-t8--debug-client-acquires-an-l1-token), [UC-R6](#uc-r6--rs-enforces-a-minimum-auth_level)) |
 | payload | `exp` | now + 300 s |
 
 Bruno: `auth/06-get-placer-token-l2.bru`, `auth/07-get-fulfiller-token-l2.bru`.
@@ -136,6 +140,48 @@ Bruno: `negative/06-expired-client-assertion.bru`,
 
 ---
 
+### UC-T8 — Debug client acquires an L1 token
+
+**Debug/test use only — not a production integration path.** A hospital that
+has requested and been provisioned an L1 debug client
+([UC-O5](operational.md#uc-o5--provisioning-an-l1-debug-client), [ADR
+0004](../adr/0004-reinstate-l1-debug-client.md)) authenticates with a plain
+`client_secret` instead of a signed assertion — useful for isolating
+connectivity issues (firewalls, proxies, JWKS reachability) that are harder
+to diagnose through L2's signed-assertion flow.
+
+**Actor:** hospital application (debug/test tooling)
+**Precondition:** `config/hospitals-l1/{org_id}.yaml` exists and Terraform
+has been applied; the hospital holds the Keycloak-generated `client_secret`
+for `{org_id}--l1`.
+**Request:**
+```http
+POST /realms/umzh-connect/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials
+&client_id={org_id}--l1
+&client_secret=<Keycloak-generated secret>
+```
+
+**Expected token (JWT):** same shape as [UC-T1](#uc-t1--hospital-acquires-a-token-l2)
+(`organization_reference`, `default_scopes`, ecosystem `aud`), except:
+
+| Where | Claim | Value |
+|-------|-------|-------|
+| payload | `client_id` | `{org_id}--l1` |
+| payload | `extensions.umzhconnect.auth_level` | **`"L1"`** — the signal resource servers use to identify this as a debug token and, if they choose to, reject it for production/clinical data flows ([UC-R6](#uc-r6--rs-enforces-a-minimum-auth_level)) |
+
+`authorization_details` (FHIR context, [UC-T2](#uc-t2--token-with-fhir-context))
+works identically on the L1 client — the mapper set is the same as L2's.
+
+**Expected behavior when no L1 file exists for the hospital:** same as
+[UC-T5](#uc-t5--unknown-client-attempts-token-acquisition) —
+`invalid_client`, no token issued. Having an L2 client does not imply an L1
+client exists, and vice versa.
+
+---
+
 ## UC-R — Token use at the resource server
 
 ### UC-R1 — RS validates signature and standard claims
@@ -203,6 +249,39 @@ nor `scope` differentiates callers.
 
 ---
 
+### UC-R6 — RS enforces a minimum `auth_level`
+
+The RS reads `extensions.umzhconnect.auth_level` (`"L1"` or `"L2"`,
+[ADR 0004](../adr/0004-reinstate-l1-debug-client.md)) and rejects tokens
+below whatever minimum it requires for the operation being performed.
+
+**Why this matters:** L1 (`client_secret`) is provisioned only as an
+explicit, per-hospital **debug client** for connectivity troubleshooting
+([UC-O5](operational.md#uc-o5--provisioning-an-l1-debug-client),
+[UC-T8](#uc-t8--debug-client-acquires-an-l1-token)) — it is never a
+production integration path, and its client secret gets lighter-weight
+handling than a real production credential (see ADR 0004's "Relaxed secret
+handling" decision). A resource server that treats an L1 token as equivalent
+to L2 for real clinical data flows defeats the point of that separation.
+
+**Expected behavior:** an RS that only serves production/clinical data
+should require `auth_level = "L2"` and reject `"L1"` tokens (HTTP 403) even
+if signature, `aud`, `scope`, and `fhirContext` all check out. An RS that
+deliberately supports debug/test traffic may accept `"L1"`, but should not
+treat it as interchangeable with a real integration without a documented
+reason.
+
+**Current state:** the AS stamps the claim on every token; it does not
+enforce a minimum itself — enforcement is each resource server's
+responsibility (and, per ADR 0004's "Revisit when", a candidate for
+centralization once a Policy Server exists). Since the claim is required and
+never absent ([ADR 0004](../adr/0004-reinstate-l1-debug-client.md)
+supersedes [ADR 0001](../adr/0001-defer-auth-level-claim.md)'s deferral), an
+RS has no "claim missing → assume L2" case to reason about — every token
+carries an explicit value.
+
+---
+
 ## UC-S — Security and adversarial scenarios
 
 ### UC-S1 — Cross-server token replay
@@ -264,8 +343,12 @@ Bruno: `negative/02-validate-garbage-token.bru`.
 
 ### UC-S5 — Unsupported grant types
 
-The IG model is M2M only. Interactive grants (`authorization_code`, etc.) and
-`client_secret` authentication are rejected for the hospital M2M clients.
+The IG model is M2M only. Interactive grants (`authorization_code`, etc.) are
+rejected for the hospital M2M clients. `client_secret` authentication is
+rejected on the primary L2 client (`negative/01-wrong-secret.bru` presents
+one to an L2 client → 400) — it's only valid against a hospital's opt-in L1
+debug client, if one has been provisioned
+([UC-T8](#uc-t8--debug-client-acquires-an-l1-token)).
 
 Bruno: `negative/09-unsupported-grant-type.bru`, `negative/01-wrong-secret.bru`.
 
