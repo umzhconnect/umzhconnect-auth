@@ -1,11 +1,7 @@
 docs {
   UMZH Connect Auth Server — Bruno collection.
   
-  Exercises the realm from a caller's perspective: acquiring tokens (L2
-  `private_key_jwt`, with and without RFC 9396 FHIR context), presenting
-  them to a mock resource server (token-validator), and confirming that
-  rejected/edge-case requests behave the way the IG and the relevant RFCs
-  require.
+  Exercises the realm from a caller's perspective: acquiring tokens (L2 `private_key_jwt`, with and without RFC 9396 FHIR context), presenting them to a mock resource server (token-validator), and confirming that rejected/edge-case requests behave the way the IG and the relevant RFCs require.
   
   | Folder | Requests |
   |--------|----------|
@@ -13,9 +9,7 @@ docs {
   | `validation/` | Health check, validate token, mock FHIR endpoints, context token claims inspection |
   | `negative/` | Wrong secret, garbage token, missing scope, context gate without context, expired assertion, wrong assertion `aud`, unknown `authorization_details` type, unsupported grant type |
   
-  Suggested order: `auth/` → `validation/` → `negative/`. See each folder's
-  own docs (folder settings → Docs) and each request's docs block for
-  specifics.
+  Suggested order: `auth/` → `validation/` → `negative/`. See each folder's own docs (folder settings → Docs) and each request's docs block for specifics.
   
   ### auth/ sequence
   
@@ -40,13 +34,8 @@ docs {
   | `07-wrong-assertion-aud.bru` | Client assertion `aud` pointing to wrong endpoint → 400 |
   | `08-unknown-context-type.bru` | `authorization_details` with unknown type → token issued, no `fhirContext` |
   | `09-unsupported-grant-type.bru` | `authorization_code` grant (IG is M2M only) → 400 |
-  
-  
+
   ## Notes
   
-  L2 requests sign a client assertion locally using Node's `crypto`/`fs`/
-  `path` modules, which Bruno's default QuickJS sandbox does not expose —
-  switch to the Node.js sandbox first: pass `--sandbox unsafe` on the CLI,
-  or enable "Developer mode" via the green shield icon in the desktop app.
-  See `ai-docs/bruno.md` for full sandbox-mode and environment setup.
+  L2 requests sign a client assertion locally using Node's `crypto`/`fs`/ `path` modules, which Bruno's default QuickJS sandbox does not expose — switch to the Node.js sandbox first: pass `--sandbox unsafe` on the CLI, or enable "Developer mode" via the green shield icon in the desktop app. See `ai-docs/bruno.md` for full sandbox-mode and environment setup.
 }

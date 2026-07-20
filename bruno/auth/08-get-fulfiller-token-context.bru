@@ -20,10 +20,7 @@ body:form-urlencoded {
 }
 
 docs {
-  Canonical IG example (security.md §Context-centric authorization):
-  the Fulfiller fetches from the Placer's FHIR server in the context of
-  a specific ServiceRequest. The token carries fhirContext with the
-  ServiceRequest reference; aud is the constant ecosystem audience (ADR 0003).
+  Canonical IG example (security.md §Context-centric authorization): the Fulfiller fetches from the Placer's FHIR server in the context of a specific ServiceRequest. The token carries fhirContext with the ServiceRequest reference; aud is the constant ecosystem audience (ADR 0003).
 
   This mirrors auth/05 but uses the fulfiller client (hospital-b).
 

@@ -11,10 +11,7 @@ get {
 }
 
 docs {
-  Fetches the realm's OIDC discovery document. Confirms the realm exists
-  and is reachable, and that the issuer matches
-  `{{keycloakUrl}}/realms/{{realm}}` — every downstream request's `iss`
-  and audience checks assume this value is correct.
+  Fetches the realm's OIDC discovery document. Confirms the realm exists and is reachable, and that the issuer matches `{{keycloakUrl}}/realms/{{realm}}` — every downstream request's `iss` and audience checks assume this value is correct.
 }
 
 assert {

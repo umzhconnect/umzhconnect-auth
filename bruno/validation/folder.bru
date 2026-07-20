@@ -3,13 +3,7 @@ meta {
 }
 
 docs {
-  Resource-server-side requests against the mock token-validator: health
-  check, `/validate` token introspection, and mock FHIR reads/writes gated
-  by scope and `fhirContext`. Demonstrates what a real FHIR server is
-  expected to enforce given the claims the AS issues (signature/`iss`/
-  `exp`/`aud`, SMART scopes, `fhirContext`, `organization_reference`).
+  Resource-server-side requests against the mock token-validator: health check, `/validate` token introspection, and mock FHIR reads/writes gated by scope and `fhirContext`. Demonstrates what a real FHIR server is expected to enforce given the claims the AS issues (signature/`iss`/`exp`/`aud`, SMART scopes, `fhirContext`, `organization_reference`).
 
-  Most requests here depend on a token obtained in `auth/` first — see
-  each request's own docs block for which one and which environment
-  variable it reads.
+  Most requests here depend on a token obtained in `auth/` first — see each request's own docs block for which one and which environment variable it reads.
 }

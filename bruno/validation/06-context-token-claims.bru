@@ -17,17 +17,13 @@ body:json {
 }
 
 docs {
-  Verifies that the fulfiller context token (auth/08) carries the three
-  IG-required claims beyond standard OAuth:
+  Verifies that the fulfiller context token (auth/08) carries the three IG-required claims beyond standard OAuth:
 
-  1. fhirContext — the workflow object the token is bound to
-     (security.md §Issued access token)
-  2. extensions.umzhconnect.organization_reference — resolvable registry
-     URL of the calling organization (IHE IUA extensions container pattern)
+  1. fhirContext — the workflow object the token is bound to (security.md §Issued access token)
+  2. extensions.umzhconnect.organization_reference — resolvable registry URL of the calling organization (IHE IUA extensions container pattern)
   3. aud — the constant ecosystem audience (ADR 0003), i.e. the realm issuer URL
 
-  The /validate endpoint is the correctness oracle. JWT claims are
-  additionally decoded in the post-response script for structural checks.
+  The /validate endpoint is the correctness oracle. JWT claims are additionally decoded in the post-response script for structural checks.
 
   Run auth/08 first to obtain fulfillerContextToken.
 }

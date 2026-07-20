@@ -63,7 +63,7 @@ All subsequent operations assume this has been completed.
    image with the `FhirContextMapper` JAR bundled in), `token-validator`,
    `tf-config` (bakes in `keycloak/terraform` + `keycloak/config`), and
    `jwks-server`.
-2. Stand up Keycloak, its Postgres database, and a configurator `Job` that
+2. Set up Keycloak, its Postgres database, and a configurator `Job` that
    runs `terraform apply` against the running instance as an ArgoCD
    `PostSync` hook, using the config baked into the `tf-config` image.
    [`argocd-template/`](../../argocd-template) in this repo is a trimmed,

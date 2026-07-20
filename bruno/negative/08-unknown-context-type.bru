@@ -20,20 +20,13 @@ body:form-urlencoded {
 }
 
 docs {
-  Sends a syntactically valid authorization_details array but with an
-  unrecognized type ("unknown-context-type" instead of "umzh-connect-context").
-  FhirContextMapper only processes type "umzh-connect-context" and silently
-  skips everything else — so a token is issued, but with no fhirContext claim.
+  Sends a syntactically valid authorization_details array but with an unrecognized type ("unknown-context-type" instead of "umzh-connect-context"). FhirContextMapper only processes type "umzh-connect-context" and silently skips everything else — so a token is issued, but with no fhirContext claim.
 
-  Expected: KC issues a 200 token. The post-response script decodes the JWT
-  and asserts that fhirContext is ABSENT.
+  Expected: KC issues a 200 token. The post-response script decodes the JWT and asserts that fhirContext is ABSENT.
 
-  This documents the silent behavior for unknown types. A client sending this
-  would then fail at the Resource Server's context gate (see validation/04 and
-  negative/04) because the token lacks fhirContext.
+  This documents the silent behavior for unknown types. A client sending this would then fail at the Resource Server's context gate (see validation/04 and negative/04) because the token lacks fhirContext.
 
-  Related open gap: FhirContextMapper.java:98 also swallows parse errors on
-  malformed JSON, producing the same silent outcome (open-gaps.md §2).
+  Related open gap: FhirContextMapper.java:98 also swallows parse errors on malformed JSON, producing the same silent outcome (open-gaps.md §2).
 
   Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }

@@ -17,11 +17,7 @@ body:json {
 }
 
 docs {
-  Hands the Placer's L2 token (auth/06) to the validator's `/validate`
-  endpoint, which checks signature, `iss`, `exp`, and `aud` against the
-  AS's JWKS and reports the result. This is the "does a normal token
-  actually validate" positive-path counterpart to negative/02's garbage
-  input. Run auth/06 first to obtain `placerL2Token`.
+  Hands the Placer's L2 token (auth/06) to the validator's `/validate` endpoint, which checks signature, `iss`, `exp`, and `aud` against the AS's JWKS and reports the result. This is the "does a normal token actually validate" positive-path counterpart to negative/02's garbage input. Run auth/06 first to obtain `placerL2Token`.
 }
 
 assert {

@@ -17,10 +17,7 @@ body:json {
 }
 
 docs {
-  Sends a string that isn't a well-formed JWT to the token-validator's
-  `/validate` endpoint. Confirms the validator fails closed on malformed
-  input (422, `valid: false`) instead of throwing an unhandled error or
-  treating an unparseable token as implicitly valid.
+  Sends a string that isn't a well-formed JWT to the token-validator's `/validate` endpoint. Confirms the validator fails closed on malformed input (422, `valid: false`) instead of throwing an unhandled error or treating an unparseable token as implicitly valid.
 }
 
 assert {
