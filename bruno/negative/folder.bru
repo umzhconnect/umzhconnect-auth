@@ -1,0 +1,15 @@
+meta {
+  name: negative
+}
+
+docs {
+  Adversarial and error-path requests: wrong client authentication method,
+  malformed/garbage tokens, expired or misdirected client assertions,
+  an unrecognized `authorization_details` type, and an unsupported grant
+  type. Each documents an expected rejection — except `03-missing-scope`
+  and `08-unknown-context-type`, which confirm a specific non-obvious
+  success/silent-behavior case rather than a hard failure.
+
+  See each request's own docs block for the exact behavior and its
+  RFC/IG backing. Some requests here reuse tokens obtained in `auth/`.
+}

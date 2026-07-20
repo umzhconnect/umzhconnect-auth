@@ -14,6 +14,14 @@ auth:bearer {
   token: {{placerL2Token}}
 }
 
+docs {
+  Uses the Placer's L2 token (auth/06, no `fhirContext`) to read a Patient
+  resource. `system/Patient.r` is a default scope, so this should succeed —
+  demonstrates that scope-gated (not context-gated) resources work with a
+  plain L2 token. Contrast with negative/04, where the same token is
+  rejected on a context-gated resource. Run auth/06 first.
+}
+
 assert {
   res.status: eq 200
   res.body.resourceType: eq Patient

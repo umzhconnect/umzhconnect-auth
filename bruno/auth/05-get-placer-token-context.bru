@@ -19,6 +19,16 @@ body:form-urlencoded {
   authorization_details: [{"type":"umzh-connect-context","identifier":"{{contextReference}}"}]
 }
 
+docs {
+  Placer (hospital-a) requests an L2 token with an RFC 9396
+  `authorization_details` parameter naming a specific ServiceRequest. The
+  `FhirContextMapper` turns this into a `fhirContext` claim on the token,
+  scoping it to that one resource — this is what powers the context gate
+  exercised in negative/04 and validation/04.
+
+  Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
+}
+
 assert {
   res.status: eq 200
   res.body.access_token: isDefined

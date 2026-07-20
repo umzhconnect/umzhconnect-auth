@@ -18,6 +18,16 @@ body:form-urlencoded {
   scope: system/Task.cru system/ServiceRequest.rs system/Patient.r
 }
 
+docs {
+  Canonical L2 happy path: Placer (hospital-a) authenticates with
+  `private_key_jwt` (RFC 7523) and receives an access token with no
+  `authorization_details` — no `fhirContext` claim, just the requested
+  default/system scopes. `placerL2Token` is reused by several
+  validation/negative requests that don't need FHIR-context binding.
+
+  Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
+}
+
 assert {
   res.status: eq 200
   res.body.access_token: isDefined
