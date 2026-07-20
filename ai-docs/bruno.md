@@ -1,6 +1,6 @@
 ---
 recap: "Bruno collection structure and the mandatory Node.js sandbox switch for L2 requests — QuickJS lacks crypto/fs/path."
-keywords: [Bruno, QuickJS, Node.js sandbox, unsafe, --sandbox unsafe, Developer mode, green shield, l2KeysDir, crypto module, fs module, path module, pre-request scripts, bru run, local environment, private_key_jwt, RFC 7523]
+keywords: [Bruno, QuickJS, Node.js sandbox, unsafe, --sandbox unsafe, Developer mode, green shield, l2KeysDir, crypto module, fs module, path module, pre-request scripts, bru run, local environment, private_key_jwt, RFC 7523, L1, client_secret, placerL1ClientId, placerL1ClientSecret, m2m_l1_client_secrets, ADR 0004]
 ---
 
 # Bruno collection
@@ -38,3 +38,7 @@ All L2 token requests (`06`, `07`, `08`) get a constant ecosystem `aud` (the rea
 ## Key path
 
 If Bruno cannot resolve the demo key path, set the `l2KeysDir` variable in `bruno/environments/local.bru` to the absolute path of `keys/`.
+
+## L1 debug token (`09-get-placer-token-l1.bru`)
+
+Exercises the opt-in L1 (`client_secret`) debug client from [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md) — not the production path (see CLAUDE.md's "Production default is L2" rule). Needs `keycloak/config/hospitals-l1/hospital-a.yaml` to exist and `terraform apply` to have run; the client secret is Keycloak-generated (not a demo key in this repo), so fetch it with `terraform output -json m2m_l1_client_secrets` and set `placerL1ClientSecret` in the `local` environment. Unlike the L2 requests, no pre-request signing script is needed, so it works in either Bruno sandbox.

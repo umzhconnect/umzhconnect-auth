@@ -33,9 +33,27 @@ locals {
   }
 
   _hospital_l1_files = fileset("${path.module}/../config/hospitals-l1", "*.yaml")
-  hospitals_l1 = {
+  # Raw contents of every config/hospitals-l1/*.yaml file, regardless of
+  # allow_l1_debug_clients — used by the check block below to warn about
+  # files that exist but are being ignored.
+  hospitals_l1_all = {
     for f in local._hospital_l1_files :
     trimsuffix(f, ".yaml") => yamldecode(file("${path.module}/../config/hospitals-l1/${f}"))
+  }
+  # Actually provisioned L1 clients — empty unless allow_l1_debug_clients is
+  # explicitly true, so a hospitals-l1/*.yaml file present without that
+  # opt-in is silently ignored (with a warning) rather than provisioned or
+  # failing the apply. See the "L1 debug clients" section below.
+  hospitals_l1 = var.allow_l1_debug_clients ? local.hospitals_l1_all : {}
+}
+
+# Warns (does not fail apply) when config/hospitals-l1/ has file(s) but
+# allow_l1_debug_clients is false — those files are being ignored, not
+# provisioned. Set allow_l1_debug_clients=true to enable them (see ADR 0004).
+check "l1_debug_clients_ignored" {
+  assert {
+    condition     = var.allow_l1_debug_clients || length(local.hospitals_l1_all) == 0
+    error_message = "config/hospitals-l1/ contains ${length(local.hospitals_l1_all)} file(s) (${join(", ", keys(local.hospitals_l1_all))}) but allow_l1_debug_clients=false — these L1 debug clients are being ignored, not provisioned. Set allow_l1_debug_clients=true to enable them (see ADR 0004, docs/adr/0004-reinstate-l1-debug-client.md)."
   }
 }
 
@@ -164,11 +182,16 @@ resource "keycloak_openid_audience_protocol_mapper" "ecosystem_audience" {
 
 # ---------------------------------------------------------------------------
 # L1 debug clients — one per keycloak/config/hospitals-l1/{org_id}.yaml
-# (ADR 0004). Independent of the L2 client for the same org_id: presence of
-# this file is the only gate. Client secret is Keycloak-generated (not set
-# here); see outputs.tf for how it's surfaced. Secret handling for these is
-# deliberately relaxed (see ADR 0004) since L1 is a debug-only path, not the
-# production integration path.
+# (ADR 0004). Independent of the L2 client for the same org_id. Client
+# secret is Keycloak-generated (not set here); see outputs.tf for how it's
+# surfaced. Secret handling for these is deliberately relaxed (see ADR 0004)
+# since L1 is a debug-only path, not the production integration path.
+#
+# local.hospitals_l1 above is already gated on var.allow_l1_debug_clients
+# (empty unless true), so these resources simply have zero instances — and
+# thus create nothing — when the flag is off. A hospitals-l1/*.yaml file
+# present without the opt-in is ignored, not applied and not a hard failure;
+# see the "l1_debug_clients_ignored" check block above for the warning.
 # ---------------------------------------------------------------------------
 
 resource "keycloak_openid_client" "m2m_l1" {

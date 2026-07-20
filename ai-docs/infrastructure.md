@@ -1,6 +1,6 @@
 ---
 recap: "docker-compose stack — services, the KC_HOSTNAME_BACKCHANNEL_DYNAMIC split between internal and published URLs, and the jwks-server role. Also covers the dev k8s deployment: manifests live in the separate tch-umzh-connect-gitops repo, this repo only builds the images (keycloak, token-validator, tf-config, jwks-server) they reference."
-keywords: [KC_HOSTNAME_BACKCHANNEL_DYNAMIC, keycloak:8080, localhost:8180, backchannel URL, published issuer, jwks-server, nginx, token-validator, keycloak-config, start-dev, production hardening, TF_VAR_keycloak_url, apisix, compose network, tch-umzh-connect-gitops, kgateway, Gateway, HTTPRoute, postgres-operator, postgresql.acid.zalan.do, umzh-connect namespace, auth.umzh.dev.example.com, tf-workspace, tf-config, ci-keycloak.yml, ci-token-validator.yml, ci-tf-config.yml, ci-jwks-server.yml, argocd-image-updater]
+keywords: [KC_HOSTNAME_BACKCHANNEL_DYNAMIC, keycloak:8080, localhost:8180, backchannel URL, published issuer, jwks-server, nginx, token-validator, keycloak-config, start-dev, production hardening, TF_VAR_keycloak_url, apisix, compose network, tch-umzh-connect-gitops, kgateway, Gateway, HTTPRoute, postgres-operator, postgresql.acid.zalan.do, umzh-connect namespace, auth.umzh.dev.example.com, tf-workspace, tf-config, ci-keycloak.yml, ci-token-validator.yml, ci-tf-config.yml, ci-jwks-server.yml, argocd-image-updater, allow_l1_debug_clients, TF_VAR_allow_l1_debug_clients, hospitals-l1, ADR 0004]
 ---
 
 # Infrastructure
@@ -37,6 +37,37 @@ terraform apply
 ## Dev-only flags
 
 `start-dev` in `docker-compose.yml` disables all Keycloak production hardening. Always document this clearly and never use it in a production image. For production, the command becomes `start --optimized`.
+
+## Enabling L1 debug clients locally
+
+`allow_l1_debug_clients` (`keycloak/terraform/variables.tf`, default `false`) gates whether `config/hospitals-l1/*.yaml` files are actually provisioned — see [terraform.md](terraform.md) and [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md). By default `docker compose up keycloak-config` **ignores** any file under `config/hospitals-l1/` (e.g. the `hospital-a.yaml` example) and only logs a warning; it does not create the L1 client.
+
+`docker-compose.yml`'s `keycloak-config` service now forwards this through explicitly:
+
+```yaml
+environment:
+  TF_VAR_allow_l1_debug_clients: ${TF_VAR_allow_l1_debug_clients:-false}
+```
+
+This is required — **Compose does not pass arbitrary host environment variables into a container**, only ones the service explicitly lists (directly or via `${...}` substitution, as above). Exporting `TF_VAR_allow_l1_debug_clients=true` in your shell and running `docker compose up keycloak-config` with an *older* compose file that didn't reference the var at all had no effect on the container, regardless of the shell export — this is what silently produced the ignored-with-a-warning outcome.
+
+To enable L1 clients for local testing, with the `environment:` entry above in place:
+
+```sh
+TF_VAR_allow_l1_debug_clients=true docker compose up keycloak-config
+```
+
+**Watch for the "up-to-date, skipping" trap too.** `docker compose up <service>` only recreates a container when Compose detects its resolved config changed since the last run. If you've already run `keycloak-config` once (e.g. as part of `docker compose up` for the whole stack) and then re-run `docker compose up keycloak-config` with a *different* value for `TF_VAR_allow_l1_debug_clients`, Compose does detect the changed resolved environment and recreates it — but if you're unsure, or want a guaranteed one-off apply without touching the persistent container's state, use `run` instead of `up`:
+
+```sh
+docker compose run --rm -e TF_VAR_allow_l1_debug_clients=true keycloak-config
+```
+
+`run` always starts a fresh container with the given `-e` override, sidestepping the "already up to date" check entirely.
+
+Either way, this is a local convenience only — do not commit a non-`false` default for `TF_VAR_allow_l1_debug_clients` in `docker-compose.yml`, and don't carry the override into any shared/prod compose or gitops manifest; see the "Safeguard" note in [terraform.md](terraform.md).
+
+After enabling, fetch the generated secret with `terraform output -json m2m_l1_client_secrets` (from `keycloak/terraform/`, or `docker compose exec keycloak-config terraform output ...` if run inside the container) to use with `bruno/auth/09-get-placer-token-l1.bru`.
 
 ## Dev k8s deployment (ArgoCD)
 
