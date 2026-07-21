@@ -7,13 +7,15 @@ configuration changes, lifecycle management, and incident response.
 Everything in this document follows two invariants:
 
 1. **All Keycloak state is Terraform-managed from VCS.** Every KC client is
-   generated from `keycloak/config/hospitals/*.yaml`; every realm scope from
-   `keycloak/config/scopes.yaml`. Never hand-edit the KC admin console — any
-   change made there is silently reverted on the next `terraform apply` and is
-   lost in disaster recovery ([UC-L5](#uc-l5--disaster-recovery)).
+   generated from a `hospitals/*.yaml` config file; every realm scope from a
+   `scopes.yaml` config file (see "Where hospital/scope config actually
+   lives" below for where those files live in your environment). Never
+   hand-edit the KC admin console — any change made there is silently
+   reverted on the next `terraform apply` and is lost in disaster recovery
+   ([UC-L5](#uc-l5--disaster-recovery)).
 2. **One primary (L2) KC client per hospital, provisioned explicitly.** A
-   hospital with no `config/hospitals/{org_id}.yaml` file has no KC client and
-   cannot obtain tokens ([ADR 0002](../adr/0002-one-client-per-hospital.md)).
+   hospital with no `hospitals/{org_id}.yaml` config file has no KC client
+   and cannot obtain tokens ([ADR 0002](../adr/0002-one-client-per-hospital.md)).
    The primary, production integration path is always `private_key_jwt` (L2).
    `client_secret` (L1) is **not** a production path — it exists only as an
    explicit, per-hospital, opt-in **debug client**
@@ -28,6 +30,32 @@ Architecture references: [ADR 0002 — one client per
 hospital](../adr/0002-one-client-per-hospital.md), [ADR 0003 — constant
 ecosystem `aud`](../adr/0003-constant-ecosystem-audience.md), [ADR 0004 —
 reinstate L1 as a debug client](../adr/0004-reinstate-l1-debug-client.md).
+
+---
+
+## Where hospital/scope config actually lives
+
+This repo ships the Terraform *logic* (`keycloak/terraform/*.tf`) and, as a
+convenience, a `keycloak/config/` YAML tree so the local docker-compose stack
+has something to apply out of the box — that copy is a demonstration fixture
+only, not a production config source.
+
+A real deployment keeps its own config outside this repo, in whatever repo
+drives its deployment (e.g. a gitops repo), using the same YAML shape. The
+generic sample under [`./argocd-template`](../../argocd-template) shows the
+pattern: hospital/scope YAML lives under `keycloak_config/` in *your*
+deployment repo and is mounted into the Terraform-apply Job via a kustomize
+`configMapGenerator` — kept out of the Terraform image so onboarding a
+hospital never requires rebuilding or republishing anything from this repo.
+See [`argocd-template/README.md`](../../argocd-template/README.md) for the
+exact file layout.
+
+So throughout this document, "edit `keycloak/config/hospitals/{org_id}.yaml`"
+means: edit that file in whichever location is authoritative for your
+environment — this repo's copy for the local docker-compose demo, or the
+equivalent file in your deployment repo's `keycloak_config/` directory
+(modeled on `./argocd-template`) for a real deployment. Only the Terraform
+`.tf` logic itself is versioned in this repo for every environment.
 
 ---
 
@@ -58,21 +86,24 @@ All subsequent operations assume this has been completed.
 **Actor:** platform operator
 **Trigger:** new environment provisioned
 
-**Kubernetes (ArgoCD) — the deployment path:**
+**Kubernetes (ArgoCD or similar) — the deployment path:**
 1. Build and publish the four images this repo produces: `keycloak` (custom
    image with the `FhirContextMapper` JAR bundled in), `token-validator`,
-   `tf-config` (bakes in `keycloak/terraform` + `keycloak/config`), and
+   `tf-config` (a Terraform image built from this repo's
+   `keycloak/terraform/` logic only — no hospital/scope config), and
    `jwks-server`.
 2. Set up Keycloak, its Postgres database, and a configurator `Job` that
-   runs `terraform apply` against the running instance as an ArgoCD
-   `PostSync` hook, using the config baked into the `tf-config` image.
+   runs `terraform apply` against the running instance as a post-deploy hook
+   (e.g. an ArgoCD `PostSync` hook), reading hospital/scope config from
+   *your own* deployment repo (see "Where hospital/scope config actually
+   lives" above) rather than from anything baked into the `tf-config` image.
    [`argocd-template/`](../../argocd-template) in this repo is a trimmed,
    generalized sample of these manifests (Deployment, Service, PostSync Job,
    kustomization) — see [argocd-template/README.md](../../argocd-template/README.md)
    for what's included and how to adapt it (namespace, hostnames,
    secrets-store, image registry).
 3. The configurator Job creates the realm, scopes, mappers, and one KC client
-   per file in `config/hospitals/`. Terraform state must persist across Job
+   per hospital config file. Terraform state must persist across Job
    re-runs (e.g. a PVC, as in the sample's `keycloak-config-job.yaml`) —
    otherwise every sync re-creates the realm from scratch.
 4. Verify: run the Bruno collection (`bru run --env <your-env> --sandbox
@@ -120,9 +151,13 @@ obtain tokens accepted anywhere in the ecosystem.
 | `jwks_url` | Public HTTPS endpoint where the hospital publishes the JWKS for its L2 signing key. Must be reachable from Keycloak |
 
 **Steps:**
-1. Create `keycloak/config/hospitals/{org_id}.yaml` with the five fields above
-   (filename stem must equal `org_id`).
-2. PR review and merge.
+1. Create a `{org_id}.yaml` file with the five fields above (filename stem
+   must equal `org_id`) in your environment's hospital config location — the
+   local docker-compose demo's `keycloak/config/hospitals/`, or your
+   deployment repo's equivalent directory modeled on
+   [`./argocd-template`](../../argocd-template) (see "Where hospital/scope
+   config actually lives" above).
+2. PR review and merge, in whichever repo that file lives.
 3. `terraform apply` (see [UC-O4](#uc-o4--rolling-out-a-config-change-per-environment)
    for how this happens per environment). Terraform creates KC client
    `{org_id}` with service account, `private_key_jwt` auth against the
@@ -151,13 +186,16 @@ is retired.
 **Trigger:** IG / data-sharing model change
 
 **Steps:**
-1. Edit `keycloak/config/scopes.yaml`:
+1. Edit `scopes.yaml` in your environment's config location (the local
+   docker-compose demo's `keycloak/config/scopes.yaml`, or your deployment
+   repo's equivalent modeled on [`./argocd-template`](../../argocd-template) —
+   see "Where hospital/scope config actually lives" above):
    - `default_scopes` — assigned to every hospital client, always present in
      issued tokens.
    - `optional_scopes` — registered in the realm; any client may request them
      explicitly via the `scope` parameter, but they are not included by
      default.
-2. PR review and merge.
+2. PR review and merge, in whichever repo that file lives.
 3. `terraform apply` — new scopes are created and assigned; removed entries
    are destroyed together with their client assignments.
 
@@ -179,8 +217,9 @@ A hospital changes a property of its registration — most commonly the
 **Trigger:** infrastructure change, org metadata update
 
 **Steps:**
-1. Edit `keycloak/config/hospitals/{org_id}.yaml`.
-2. PR review and merge.
+1. Edit `{org_id}.yaml` in your environment's hospital config location (see
+   "Where hospital/scope config actually lives" above).
+2. PR review and merge, in whichever repo that file lives.
 3. `terraform apply` — the KC client is updated in place.
 
 **Postcondition:** Keycloak uses the new metadata immediately. If `jwks_url`
@@ -197,16 +236,19 @@ its systems switch `client_id` at the cutover.
 ### UC-O4 — Rolling out a config change per environment
 
 How a merged config change (hospital YAML, scopes YAML, or `.tf` change)
-actually reaches a running Keycloak.
+actually reaches a running Keycloak. The mechanism differs depending on
+whether the change is config-only or touches Terraform logic — see "Where
+hospital/scope config actually lives" above.
 
 **Actor:** platform operator / CI
-**Trigger:** any merge touching `keycloak/config/**` or `keycloak/terraform/**`
 
-| Environment | Mechanism |
-|-------------|-----------|
-| Kubernetes (ArgoCD) | Publish a new `tf-config` image (bakes in `keycloak/terraform` + `keycloak/config`); an image-updater bumps the tag in the gitops manifests, and the ArgoCD `PostSync` Job re-runs `terraform apply` with state persisted on a PVC. See [argocd-template/](../../argocd-template) for the manifest shape |
-| Local (docker-compose), for development | `docker compose up keycloak-config`, or `terraform -chdir=keycloak/terraform apply` with `TF_VAR_keycloak_url=http://localhost:8180` |
-| Production | Not yet stood up — the delivery target is a config snapshot for `umzhconnect/umzhconnect-auth` (pending) |
+| Change | Kubernetes (ArgoCD or similar) | Local (docker-compose), for development |
+|--------|--------------------------------|------------------------------------------|
+| Hospital or scope YAML only | Edit the file in your deployment repo's config directory and merge. If your deployment uses ArgoCD (or an equivalent GitOps controller) watching that repo, it detects the commit on its own and re-triggers the configurator Job, which re-runs `terraform apply` with state persisted on a PVC — no image rebuild needed. See [`argocd-template/`](../../argocd-template) for the manifest shape (`keycloak_config/`, `kustomization.yaml`'s `configMapGenerator`, the PostSync Job) | `docker compose up keycloak-config`, or `terraform -chdir=keycloak/terraform apply` with `TF_VAR_keycloak_url=http://localhost:8180` |
+| `.tf` logic (`keycloak/terraform/**`) | Publish a new `tf-config` image from this repo, then update your deployment repo's manifest to reference the new image tag/digest (manually, or via whatever image-automation your deployment uses — outside this repo's scope) so the configurator Job picks it up on its next run | Same as above — `docker compose up --build keycloak-config` picks up the local `.tf` changes directly |
+
+Production deployments are not yet standardized by this repo; the delivery
+target is a config snapshot for `umzhconnect/umzhconnect-auth` (pending).
 
 **Postcondition:** the realm in that environment matches VCS.
 
@@ -233,13 +275,15 @@ to isolate
    to avoid implementing `private_key_jwt`. If the hospital wants a
    long-term `client_secret` integration, decline per the "Requests you must
    decline" table above.
-2. Create `keycloak/config/hospitals-l1/{org_id}.yaml` with
+2. Create a `hospitals-l1/{org_id}.yaml` file (in the local docker-compose
+   demo's `keycloak/config/hospitals-l1/`, or your deployment repo's
+   equivalent — see "Where hospital/scope config actually lives" above) with
    `org_display_name`, `org_reference`, and (recommended for traceability)
    `reason` / `requested_by` / `requested_date` — see [the directory's
    README](../../keycloak/config/hospitals-l1/README.md) for the field
    schema. Independent of the L2 file for the same `org_id`: the hospital
    may have an L1 file, an L2 file, both, or neither, in any order.
-3. PR review and merge.
+3. PR review and merge, in whichever repo that file lives.
 4. `terraform apply` — creates KC client `{org_id}--l1` with a
    Keycloak-generated `client_secret`, `client_credentials` grant, the same
    default/optional scopes and mapper set as the L2 client (org reference,
@@ -298,9 +342,10 @@ A hospital leaves the network or is decommissioned.
 **Trigger:** contract end, decommissioning
 
 **Steps:**
-1. Delete `keycloak/config/hospitals/{org_id}.yaml`. There is no allow-list
-   or grants file to clean up elsewhere.
-2. PR review and merge.
+1. Delete the `{org_id}.yaml` file from your environment's hospital config
+   location (see "Where hospital/scope config actually lives" above). There
+   is no allow-list or grants file to clean up elsewhere.
+2. PR review and merge, in whichever repo that file lives.
 3. `terraform apply` — the KC client and its mappers are destroyed.
 
 **Postcondition:** the hospital can no longer obtain tokens. Tokens already
@@ -355,8 +400,10 @@ change, or base-image CVE patch).
    re-evaluating the `aud` design on every KC version bump.
 3. Rebuild and test: `docker compose build keycloak` locally, then run the
    Bruno collection and token-validator checks against the new image.
-4. Publish the image; the Kubernetes deployment's image-updater picks up the
-   new tag and rolls it out.
+4. Publish the image, then update your deployment repo's manifest to
+   reference the new tag/digest (manually, or via whatever image-automation
+   your deployment uses — see [`./argocd-template`](../../argocd-template)
+   for the manifest shape) so it gets rolled out.
 5. If the Terraform provider version also changed, run `terraform apply` after
    the new instance is healthy.
 

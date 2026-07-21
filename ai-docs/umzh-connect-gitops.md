@@ -10,6 +10,16 @@ Kubernetes/ArgoCD deployment work spanning three repos. If you're picking
 this up in a fresh session, read this file first — it has every decision,
 exact name/value, file location, and what's still outstanding.
 
+**End-user docs under `docs/` must not leak this repo split.** This repo is
+public and reusable for deployments other than our own dev cluster. Anything
+under `docs/` (use-cases, ADRs, etc.) is end-user facing and must describe
+deployment generically — referencing only [`./argocd-template`](../argocd-template)
+and this repo's own code/config, never this file, any other `ai-docs/*.md`
+doc, or the concrete `the gitops repo` / `the ArgoCD-applications repo`
+repo names. Those concrete repos and their image-updater/write-back wiring
+are internal-deployment detail, recorded here for our own resumability, not
+part of the reusable contract this repo exposes to other adopters.
+
 **This repo builds images only.** All ArgoCD/k8s manifests live in the
 separate **`tch-umzh-connect-gitops`** repo. That split happened after the
 first version of this work (which put `argocd/` + `kustomization.yaml`
