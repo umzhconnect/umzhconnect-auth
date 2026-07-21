@@ -177,6 +177,86 @@ Policy Server's) responsibility.
 
 ---
 
+### UC-O1a — Hospital generates its L2 signing key and JWKS
+
+Before a hospital can be onboarded ([UC-O1](#uc-o1--onboarding-a-new-hospital)),
+it must generate its own RSA key pair and publish the public half as a JWKS
+document at a stable, HTTPS-reachable `jwks_url`. This is entirely the
+hospital's responsibility — the platform operator never sees or handles the
+private key.
+
+**Actor:** hospital (joining or rotating)
+**Trigger:** onboarding ([UC-O1](#uc-o1--onboarding-a-new-hospital)) or key
+rotation ([UC-L1](#uc-l1--hospital-rotates-its-l2-signing-key))
+
+**Requirements the key and JWKS must satisfy** (enforced by the KC client's
+`client-jwt` authenticator, [`clients.tf`](../../keycloak/terraform/clients.tf)):
+
+- **Key type/size:** RSA, 2048 bits minimum.
+- **Algorithm:** `RS256`. Keycloak's `private_key_jwt` verification defaults
+  to RS256 when no `token.endpoint.auth.signing.alg` override is configured —
+  this repo does not configure one, so RS256 is required.
+- **`kid`:** every key in the JWKS must carry a unique `kid`. The `kid` in the
+  client assertion's JWT header must match a `kid` present in the JWKS at
+  verification time.
+- **Format:** a standard JWKS document (`{"keys": [...]}`) containing only
+  the **public** key material (`n`, `e`, `kty`, `use`, `kid`, `alg`) — never
+  the private key.
+- **Endpoint:** `jwks_url` must be a stable HTTPS URL, publicly reachable from
+  Keycloak, that always serves the current JWKS (including any overlapping
+  old key during rotation — see [UC-L1](#uc-l1--hospital-rotates-its-l2-signing-key)).
+  Keycloak fetches and caches this on demand; there's no push/registration
+  step beyond giving the operator this URL.
+
+**Steps (hospital side):**
+1. Generate an RSA-2048 key pair with `openssl` (present on macOS/Linux by
+   default):
+   ```sh
+   openssl genrsa -out l2-signing.key 2048
+   ```
+2. Convert the private key to a public JWK, and build a JWKS from it, using
+   [`step`](https://smallstep.com/docs/step-cli/) (`brew install step`):
+   ```sh
+   KID="l2-signing-$(date +%Y%m%d)"   # any unique id; must be unique per key in the JWKS
+
+   # Derive the public JWK from the private key PEM. The second output file
+   # (a private JWK) isn't used for anything — signing uses l2-signing.key
+   # directly — so it's written to a throwaway path and discarded.
+   step crypto jwk create l2-signing.pub.json /tmp/l2-signing.priv.json \
+     --from-pem l2-signing.key --kid "$KID" --use sig --alg RS256 \
+     --no-password --insecure
+   rm -f /tmp/l2-signing.priv.json
+
+   # Wrap the public JWK in a JWKS document ({"keys": [...]})
+   echo '{"keys":[]}' > l2-signing.jwks.json
+   step crypto jwk keyset add l2-signing.jwks.json < l2-signing.pub.json
+   rm -f l2-signing.pub.json
+   ```
+   Result: `l2-signing.jwks.json` contains only public key material (`n`,
+   `e`, `kty`, `use`, `kid`, `alg`) — the local demo fixture at
+   [`keys/`](../../keys/README.md) shows the same shape for
+   `*.jwks.json`. Any other JOSE/JWT library (e.g. `jose`, `python-jose`,
+   `jwcrypto`) can produce an equivalent JWKS directly from the PEM public
+   key if `step` isn't available.
+3. Publish `l2-signing.jwks.json` at a stable HTTPS endpoint on
+   infrastructure the hospital controls (e.g. behind its API gateway) — this
+   becomes the `jwks_url` value it hands to the platform operator for
+   [UC-O1](#uc-o1--onboarding-a-new-hospital) or
+   [UC-O3](#uc-o3--changing-a-hospitals-metadata-or-jwks-url).
+4. Keep `l2-signing.key` secret, never publish or transmit it — it signs
+   `private_key_jwt` client assertions (RFC 7523) directly and is never sent
+   to Keycloak or the platform operator.
+
+**Postcondition:** hospital holds a private key and has a `jwks_url` ready to
+give the platform operator for onboarding.
+
+**Note:** this is a one-time setup per key generation, repeated on every
+rotation ([UC-L1](#uc-l1--hospital-rotates-its-l2-signing-key)) — not a
+per-request step. The hospital's own signing code loads the same private key
+for every client assertion until the next rotation.
+
+---
+
 ### UC-O2 — Adding or removing a realm scope
 
 A new resource type joins the data-sharing model (new SMART scope), or a scope
