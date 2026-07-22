@@ -31,21 +31,21 @@ assert {
 
 script:pre-request {
   // Signs an RFC 7523 client assertion with the demo Level-2 private key
-  // (../keys/placer-l2.key). Requires Bruno "developer mode" (filesystem
+  // (../keys/hospital-a.key). Requires Bruno "developer mode" (filesystem
   // access). Override the key location with the l2KeysDir environment var.
   const crypto = require("crypto");
   const fs = require("fs");
   const path = require("path");
 
   const keysDir = bru.getEnvVar("l2KeysDir") || path.resolve(bru.cwd(), "..", "keys");
-  const pem = fs.readFileSync(path.join(keysDir, "placer-l2.key"), "utf8");
+  const pem = fs.readFileSync(path.join(keysDir, "hospital-a.key"), "utf8");
 
   const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
   const now = Math.floor(Date.now() / 1000);
   const tokenEndpoint = `${bru.getEnvVar("keycloakUrl")}/realms/${bru.getEnvVar("realm")}/protocol/openid-connect/token`;
 
   const clientId = bru.getEnvVar("placerClientId");
-  const header = { alg: "RS256", typ: "JWT", kid: "placer-l2" };
+  const header = { alg: "RS256", typ: "JWT", kid: "hospital-a" };
   const payload = {
     iss: clientId,
     sub: clientId,

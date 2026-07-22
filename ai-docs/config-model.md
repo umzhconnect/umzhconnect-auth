@@ -29,7 +29,7 @@ org_id: "hospital-b"
 org_display_name: "Hospital B"
 org_reference: "https://fhir.hospital-b.example/fhir/Organization/HospitalB"
 fhir_url: "https://fhir.hospital-b.example/fhir"
-jwks_url: "https://hospital-b.example/.well-known/jwks.json"
+jwks_url: "https://hospital-b.example/.well-known/hospital-b.jwks.json"
 ```
 
 | Field | Purpose |
@@ -38,7 +38,7 @@ jwks_url: "https://hospital-b.example/.well-known/jwks.json"
 | `org_display_name` | Human label shown in KC admin |
 | `org_reference` | `Organization` FHIR reference — embedded in every token as `extensions.umzhconnect.organization_reference` |
 | `fhir_url` | Base URL of this hospital's FHIR server. Not currently written into `aud` — see [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) (`aud` is a constant ecosystem value, not per-hospital) |
-| `jwks_url` | Public JWKS endpoint KC uses to verify `private_key_jwt` assertions |
+| `jwks_url` | Public JWKS endpoint KC uses to verify `private_key_jwt` assertions. By convention, hosted under `/.well-known/{org_id}.jwks.json` — see the local demo setup in `keys/README.md` |
 
 Terraform creates one KC client per file:
 - `{org_id}` — the M2M client (L2 `private_key_jwt`, service account enabled)

@@ -11,7 +11,7 @@ keywords: [KC_HOSTNAME_BACKCHANNEL_DYNAMIC, keycloak:8080, localhost:8180, backc
 |---------|-----------|-------|
 | `keycloak` | http://localhost:8180 | admin / admin; issuer `http://localhost:8180/realms/umzh-connect` |
 | `keycloak-config` | — | One-shot Terraform apply; runs and exits |
-| `jwks-server` | http://localhost:8085 | nginx serving demo L2 client JWKS files from `keys/` |
+| `jwks-server` | http://localhost:8085 | nginx serving demo L2 client JWKS files from `keys/.well-known/` at `/.well-known/{client_id}.jwks.json` |
 | `token-validator` | http://localhost:8086 | Mock resource server |
 
 ## KC_HOSTNAME_BACKCHANNEL_DYNAMIC
@@ -26,7 +26,7 @@ When running Terraform directly on the host (outside compose): `TF_VAR_keycloak_
 
 ## jwks-server
 
-Stands in for the sandbox's APISIX gateways, which publish client JWKS at `/jwks.json` on each party's external gateway. For drop-in sandbox use, override the Terraform variables:
+By default, hosts each demo client's JWKS under `/.well-known/{client_id}.jwks.json` (e.g. `http://localhost:8085/.well-known/hospital-a.jwks.json`) — see `keys/README.md`. This is our own convention; it stands in for the sandbox's APISIX gateways, which instead publish client JWKS at `/jwks.json` (no `.well-known/`) on each party's external gateway. For drop-in sandbox use, override the Terraform variables:
 
 ```sh
 TF_VAR_placer_l2_jwks_url=http://apisix-placer-external:9080/jwks.json \

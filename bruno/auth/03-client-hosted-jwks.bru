@@ -1,0 +1,20 @@
+meta {
+  name: Client Hosted JWKS (client key, L2)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{jwksServerUrl}}/.well-known/{{clientId}}.jwks.json
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.keys: isDefined
+}
+
+docs {
+  Fetches an L2 client's own hosted JWKS — the public key set Keycloak fetches from `jwks.url` to verify that client's `private_key_jwt` assertions (see [ai-docs/infrastructure.md](../../ai-docs/infrastructure.md)). Hosted at `/.well-known/{client_id}.jwks.json` by convention. Defaults to the placer (`clientId: hospital-a`) via the `clientId` environment variable — set it to `hospital-b` (or override inline) to fetch the fulfiller's instead, since there's no per-role distinction on this request. This stands in for the sandbox's APISIX-published `/jwks.json`, not the AS's own signing keys (that's `02-jwks.bru`).
+}
