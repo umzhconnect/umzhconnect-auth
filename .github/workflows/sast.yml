@@ -12,17 +12,36 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-jobs:
-  codeql-mapper:
-    uses: trifork/tch-pipeline-templates/.github/workflows/sast.yml@v1.9
-    with:
-      languages: '["java-kotlin"]'
-      project-path: "keycloak/mapper"
-    # Omit secrets: - the mapper's Maven dependencies are all public.
+permissions:
+  security-events: write
+  actions: read
+  contents: read
 
-  codeql-token-validator:
-    uses: trifork/tch-pipeline-templates/.github/workflows/sast.yml@v1.9
-    with:
-      languages: '["javascript-typescript"]'
-      project-path: "token-validator"
-    # Omit secrets: - token-validator's npm dependencies are all public.
+jobs:
+  analyze:
+    name: CodeQL (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: mapper
+            language: java-kotlin
+          - name: token-validator
+            language: javascript-typescript
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
