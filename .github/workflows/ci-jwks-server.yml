@@ -1,11 +1,5 @@
 name: CI - jwks-server image
 
-# Bespoke publish (not the shared containerized.yml template) for the same
-# reasons as ci-keycloak.yml / ci-token-validator.yml: this repo publishes
-# more than one image, and containerized.yml hardcodes the GHCR name to
-# ghcr.io/<owner>/<repo> with no per-image override, and skips publish on
-# main/master without an explicit tag input.
-
 on:
   workflow_dispatch:
     inputs:
@@ -19,52 +13,17 @@ on:
       - "jwks-server/**"
       - "keys/*.jwks.json"
       - ".github/workflows/ci-jwks-server.yml"
+      - ".github/workflows/build-image.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  IMAGE: ghcr.io/trifork/tch-umzh-connect-authentication-server-jwks
-
-permissions:
-  contents: read
-  packages: write
-
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-
-      - name: Resolve tag
-        id: tag
-        run: |
-          TAG="${{ inputs.tag }}"
-          if [ -z "${TAG}" ]; then
-            TAG="${GITHUB_SHA:0:8}"
-          fi
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-
-      - name: Build and push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: jwks-server/Dockerfile
-          push: true
-          tags: |
-            ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
-            ${{ env.IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+    uses: ./.github/workflows/build-image.yml
+    with:
+      image: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}-jwks
+      context: .
+      file: jwks-server/Dockerfile
+      tag: ${{ inputs.tag }}
