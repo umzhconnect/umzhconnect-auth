@@ -3,7 +3,7 @@ meta {
 }
 
 docs {
-  Token acquisition requests: OIDC discovery and JWKS (sanity checks that the realm is up and its signing keys are published), then L2 `private_key_jwt` token requests for both demo hospitals (placer/hospital-a, fulfiller/hospital-b), with and without an RFC 9396 `authorization_details` parameter binding the token to a specific FHIR resource (`fhirContext`).
+  Token acquisition requests: OIDC discovery, the AS's own JWKS, and a client's hosted JWKS (sanity checks that the realm is up, its signing keys are published, and a demo L2 client's public key is reachable at the `jwks.url` Keycloak uses for `private_key_jwt` verification — defaults to the placer via the `clientId` variable, but there's no per-role distinction on that request), then L2 `private_key_jwt` token requests for both demo hospitals (placer/hospital-a, fulfiller/hospital-b), with and without an RFC 9396 `authorization_details` parameter binding the token to a specific FHIR resource (`fhirContext`).
   
   Run this folder first — `validation/` and `negative/` reuse the tokens these requests store in environment variables (`placerL2Token`, `fulfillerL2Token`, `placerContextToken`, `fulfillerContextToken`).
   

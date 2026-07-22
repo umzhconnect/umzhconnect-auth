@@ -72,10 +72,11 @@ like `keycloak`/`token-validator` already were:
   running `terraform apply`, so `terraform.tfstate` still persists across Job
   re-runs even though the image itself is immutable per tag.
 - **`jwks-server`** (`jwks-server/Dockerfile`, `FROM nginx:1.27-alpine`) —
-  `COPY keys/fulfiller-l2.jwks.json keys/placer-l2.jwks.json /usr/share/nginx/html/`.
-  Bakes in only the two public JWKS files, never the demo private `.key`
-  files — enforced at the Dockerfile level now, not a curated ConfigMap file
-  list.
+  `COPY keys/.well-known/ /usr/share/nginx/html/.well-known/`.
+  Bakes in only `keys/.well-known/` (the public JWKS files, served at
+  `/.well-known/{client_id}.jwks.json`), never the demo private `.key`
+  files that live directly under `keys/` — enforced by directory boundary
+  at the Dockerfile level, not a curated ConfigMap file list.
 
 This also fully retired the ConfigMap-based approach's `scopes.yaml` bug (see
 History) — there's no `configMapGenerator` left to omit a file from.

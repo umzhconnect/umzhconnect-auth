@@ -35,7 +35,7 @@ org_id: "hospital-b"
 org_display_name: "Hospital B"
 org_reference: "https://fhir.hospital-b.example/fhir/Organization/HospitalB"
 fhir_url: "https://fhir.hospital-b.example/fhir"
-jwks_url: "https://hospital-b.example/.well-known/jwks.json"
+jwks_url: "https://hospital-b.example/.well-known/hospital-b.jwks.json"
 ```
 
 Adding a hospital = one new YAML file + `terraform apply`. No HCL changes needed. There is no per-hospital allow-list — [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) removed the `allowed_clients` field along with the target-specific `aud:{org_id}` scope mechanism it used to gate.
