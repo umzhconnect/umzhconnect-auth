@@ -47,9 +47,9 @@ Adding a hospital = one new YAML file + `terraform apply`. No HCL changes needed
 
 **Safeguard:** `allow_l1_debug_clients` (bool, default `false`, in `variables.tf`) gates `local.clients_l1` in every environment, not just `"prod"`. When it's `false`, any `config/clients-l1/*.yaml` file present is silently ignored — no L1 client is created for it — and the `check "l1_debug_clients_ignored"` block (`clients.tf`) emits a plan-time **warning** naming the ignored file(s); it does not fail `terraform apply`. It's a plain input variable, not baked into the `tf-config` image, so it's set per-environment at apply time (`TF_VAR_allow_l1_debug_clients=true` on whichever `keycloak-config` Job should allow L1, left unset/`false` everywhere else) without rebuilding the image. Note: local `docker-compose` does not set this variable, so any `config/clients-l1/*.yaml` file present is ignored (with a warning) rather than provisioned when running `docker compose up keycloak-config` locally, unless `TF_VAR_allow_l1_debug_clients=true` is added to its environment.
 
-## scopes.tf — SMART optional scopes
+## scopes.tf — every scope is optional, none is default
 
-`keycloak_openid_client_optional_scopes.m2m` registers the SMART optional scopes from `config/scopes.yaml` on every M2M client. Requesting a scope not in that list returns `invalid_scope`.
+`keycloak_openid_client_optional_scopes.m2m` registers every scope from `config/scopes.yaml` on every M2M client. Requesting a scope not in that list returns `invalid_scope`. `keycloak_openid_client_default_scopes.m2m` is pinned to an empty list — deliberately, so no scope is ever included in an issued token unless the caller requests it in the `scope` parameter. Same pattern for `m2m_l1`.
 
 ## The `extra_config` trap — no `attributes.` prefix
 

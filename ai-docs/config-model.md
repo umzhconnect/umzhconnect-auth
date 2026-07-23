@@ -1,6 +1,6 @@
 ---
 recap: "YAML-driven config model — client_id-keyed config files under config/clients-l2/ and config/clients-l1/ (plus config/scopes.yaml) that drive KC client generation via Terraform. Filenames are a convention only; client_id and auth_level in the file content are what Terraform actually reads."
-keywords: [config/clients-l2, config/clients-l1, config/scopes.yaml, client_id, auth_level, fhir_url, jwks_url, organization_reference, client_name, default_scopes, optional_scopes, scopes.tf, clients.tf, ecosystem-audience-mapper, onboarding, terraform apply, lifecycle precondition, ADR 0002, ADR 0003, ADR 0004]
+keywords: [config/clients-l2, config/clients-l1, config/scopes.yaml, client_id, auth_level, fhir_url, jwks_url, organization_reference, client_name, optional_scopes, least privilege per request, scopes.tf, clients.tf, ecosystem-audience-mapper, onboarding, terraform apply, lifecycle precondition, ADR 0002, ADR 0003, ADR 0004]
 ---
 
 # Config model
@@ -78,21 +78,16 @@ Key points:
 
 ## `config/scopes.yaml`
 
-All custom SMART Backend Services client scopes for the realm. Terraform reads this in `scopes.tf` to create scopes and assign defaults to every hospital M2M client.
+All custom SMART Backend Services client scopes for the realm. Terraform reads this in `scopes.tf` to create scopes and register every one of them as an optional scope on every hospital M2M client.
 
 ```yaml
-default_scopes:
+scopes:
   - name: "system/Task.cru"
     description: "SMART system scope: create/read/update Tasks"
   # ... (see the file for the full list)
-
-optional_scopes:
-  - name: "smart-task-write"
-    description: "SMART on FHIR: Create/update tasks"
-  # ...
 ```
 
-`default_scopes` are always present in issued tokens. `optional_scopes` are registered in KC so callers may request them explicitly via the `scope` parameter; they are not sent unless requested.
+Every scope is optional — none is ever included by default. A caller only receives the scopes it explicitly requests via the token request's `scope` parameter, regardless of what other scopes it's entitled to request. `default_scopes` on the KC client resources is pinned to an empty list in `scopes.tf` specifically to enforce this (see that file's comments).
 
 To add a scope: add an entry to `config/scopes.yaml` and run `terraform apply`. To remove one: remove the entry — Terraform will destroy the scope and its client assignments.
 

@@ -1,5 +1,5 @@
 meta {
-  name: Read Organization with default scope (200)
+  name: Read Organization without requesting the scope (403)
   type: http
   seq: 3
 }
@@ -15,9 +15,9 @@ auth:bearer {
 }
 
 docs {
-  system/Organization.r is a default scope on all hospital M2M clients (scopes.yaml), so hospital-a's token includes it and the read succeeds. This request formerly expected 403 when scopes were per-client; it now verifies the opposite: default scopes are present and enforced correctly. Run auth/06 first to obtain placerL2Token.
+  placerL2Token (auth/06) requests `system/Task.cru system/ServiceRequest.rs system/Patient.r` — not `system/Organization.r`. No scope is ever included in a token unless explicitly requested (scopes.yaml registers every scope as optional, none as default), so this token has no `system/Organization.r` and the read is rejected. Run auth/06 first to obtain placerL2Token.
 }
 
 assert {
-  res.status: eq 200
+  res.status: eq 403
 }

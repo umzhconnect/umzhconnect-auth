@@ -2,17 +2,19 @@
 #
 # Terraform (scopes.tf) reads this file to:
 #   1. Create each scope as a keycloak_openid_client_scope resource.
-#   2. Assign default_scopes as the default client scopes on every hospital
-#      M2M client — i.e. always included in issued tokens without the caller
-#      requesting them.
-#   3. Register optional_scopes in KC so callers may request them explicitly
-#      via the `scope` parameter; they are not included by default.
+#   2. Register every scope as an optional scope on every hospital M2M
+#      client, so a caller may request any of them explicitly via the
+#      token request's `scope` parameter.
+#
+# No scope is ever included by default. A caller that doesn't request a
+# scope does not receive it, regardless of what other scopes it's entitled
+# to request — least privilege per request, not per client.
 #
 # Scope names follow the SMART Backend Services (system-level) convention.
 # The suffix letters encode FHIR interactions: r=read, s=search, c=create, u=update.
 # See https://hl7.org/fhir/smart-app-launch/scopes-and-launch-context.html
 
-default_scopes:
+scopes:
   - name: "system/Task.cru"
     description: "SMART system scope: create/read/update Tasks"
   - name: "system/ServiceRequest.rs"
@@ -47,8 +49,6 @@ default_scopes:
     description: "SMART system scope: read Practitioners"
   - name: "system/PractitionerRole.r"
     description: "SMART system scope: read PractitionerRoles"
-
-optional_scopes:
   - name: "smart-patient-read"
     description: "SMART on FHIR: Read patient data"
   - name: "smart-task-write"

@@ -36,9 +36,13 @@ grant_type=client_credentials
 &client_id={client_id}
 &client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
 &client_assertion=<JWT signed with the hospital's private key>
+&scope=system/Task.cru system/ServiceRequest.rs system/Patient.r
 ```
 The client assertion must have `iss` = `sub` = `{client_id}` and `aud` = the
-realm token endpoint (RFC 7523 §3).
+realm token endpoint (RFC 7523 §3). `scope` must list every scope the caller
+actually needs — no scope is included in the token unless it's requested
+here, even ones the caller is otherwise entitled to request
+([UC-T4](#uc-t4--requesting-scopes)).
 
 **Expected token (JWT):**
 
@@ -48,7 +52,7 @@ realm token endpoint (RFC 7523 §3).
 | payload | `iss` | realm issuer URL |
 | payload | `aud` | **constant ecosystem value** — the realm issuer URL, identical for every hospital and every target ([ADR 0003](../adr/0003-constant-ecosystem-audience.md)) |
 | payload | `client_id` | `{client_id}` (RFC 9068 §2.2; hardcoded mapper, distinct from `azp`) |
-| payload | `scope` | all `default_scopes` from `config/scopes.yaml` (no `scope` parameter needed) |
+| payload | `scope` | exactly the scopes requested in the token request's `scope` parameter, from `config/scopes.yaml`'s registered scopes — none is ever included by default |
 | payload | `extensions.umzhconnect.organization_reference` | the hospital's `organization_reference` — set by the AS, never by the caller |
 | payload | `extensions.umzhconnect.auth_level` | `"L2"` — hardcoded, required on every token ([ADR 0004](../adr/0004-reinstate-l1-debug-client.md)); resource servers use this to distinguish L2 from an L1 debug token ([UC-T8](#uc-t8--debug-client-acquires-an-l1-token), [UC-R6](#uc-r6--rs-enforces-a-minimum-auth_level)) |
 | payload | `exp` | now + 300 s |
@@ -89,16 +93,21 @@ return 403 to such a token ([UC-R4](#uc-r4--rs-enforces-fhircontext)).
 
 ---
 
-### UC-T4 — Requesting optional scopes
+### UC-T4 — Requesting scopes
 
 The app passes an explicit `scope` parameter naming entries from
-`optional_scopes` (e.g. `scope=smart-task-write`).
+`config/scopes.yaml` (e.g. `scope=smart-task-write`). Every scope in that
+file is registered as optional on every client — there is no "default" tier
+that's included without being asked for.
 
-**Expected behavior:** the requested optional scopes appear in the token in
-addition to the defaults. Optional scopes are registered realm-wide — any
-onboarded hospital may request any of them; there is no per-hospital grant
-(scope-level authorization is a resource-server / future Policy Server
-concern).
+**Expected behavior:** exactly the requested scopes appear in the token,
+and nothing else. Scopes are registered realm-wide — any onboarded hospital
+may request any of them; there is no per-hospital grant (scope-level
+authorization is a resource-server / future Policy Server concern). A scope
+not listed in `config/scopes.yaml` at all returns `invalid_scope`; a scope
+that exists but wasn't requested is simply absent from the token, not an
+error — resource-server checks ([UC-R](#uc-r--token-use-at-the-resource-server))
+then reject any access that needed it.
 
 ---
 
@@ -161,10 +170,11 @@ Content-Type: application/x-www-form-urlencoded
 grant_type=client_credentials
 &client_id={client_id}
 &client_secret=<Keycloak-generated secret>
+&scope=system/Task.cru system/ServiceRequest.rs system/Patient.r
 ```
 
 **Expected token (JWT):** same shape as [UC-T1](#uc-t1--hospital-acquires-a-token-l2)
-(`organization_reference`, `default_scopes`, ecosystem `aud`), except:
+(`organization_reference`, exactly the requested scopes, ecosystem `aud`), except:
 
 | Where | Claim | Value |
 |-------|-------|-------|
@@ -213,9 +223,9 @@ The RS checks the token's `scope` claim contains the scope required for the
 operation (e.g. `system/Patient.r` for `GET /fhir/Patient/:id`). Insufficient
 scope → HTTP 403.
 
-Note the limits: since every hospital client carries the same
-`default_scopes`, the scope claim distinguishes *operations*, not *callers*.
-Caller-level authorization is UC-R5.
+Note the limits: since every hospital client can request the same scopes
+(there's no per-hospital scope grant), the scope claim distinguishes
+*operations*, not *callers*. Caller-level authorization is UC-R5.
 
 ---
 

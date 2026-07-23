@@ -28,7 +28,7 @@ docs {
   |------|---------------------|
   | `01-wrong-secret.bru` | `client_secret` against L2 client → 400 |
   | `02-validate-garbage-token.bru` | Malformed token at `/validate` → 422 |
-  | `03-missing-scope.bru` | Default scope present (positive case of default scope) |
+  | `03-missing-scope.bru` | Resource read rejected when the token didn't request the resource's scope → 403 |
   | `04-context-gate-without-context.bru` | L2 token without `fhirContext` → 403 on context-gated resource |
   | `06-expired-client-assertion.bru` | Client assertion with `exp` in the past → 400 (RFC 7523 §3) |
   | `07-wrong-assertion-aud.bru` | Client assertion `aud` pointing to wrong endpoint → 400 |

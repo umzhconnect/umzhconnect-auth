@@ -1,6 +1,6 @@
 ---
 recap: "Keycloak realm settings that must stay sandbox-compatible — fixed settings, how clients are generated, mappers, scopes, roles, and documented divergences."
-keywords: [umzh-connect realm, issuer, token lifetime, L1 debug client, L2, client-jwt, client-secret, private_key_jwt, client-id-mapper, client_id claim, azp, RFC 9068, at+jwt, access.token.header.type.rfc9068, org-reference-mapper, fhir-context-mapper, auth-level-mapper, auth_level, roles, admin, sandbox parity, registrationAllowed, display_name, ssl_required, start-dev, smart scopes, system scopes, default_scopes, optional_scopes, scopes.yaml, scopes.tf, keycloak_openid_client_scope, ecosystem-audience-mapper, audience mapper, ADR 0003, ADR 0004]
+keywords: [umzh-connect realm, issuer, token lifetime, L1 debug client, L2, client-jwt, client-secret, private_key_jwt, client-id-mapper, client_id claim, azp, RFC 9068, at+jwt, access.token.header.type.rfc9068, org-reference-mapper, fhir-context-mapper, auth-level-mapper, auth_level, roles, admin, sandbox parity, registrationAllowed, display_name, ssl_required, start-dev, smart scopes, system scopes, optional_scopes, least privilege per request, scopes.yaml, scopes.tf, keycloak_openid_client_scope, ecosystem-audience-mapper, audience mapper, ADR 0003, ADR 0004]
 ---
 
 # Realm contract
@@ -41,7 +41,7 @@ Each M2M client sets `"access.token.header.type.rfc9068" = "true"` in `extra_con
 
 ## Scopes
 
-Custom client scopes are declared in `config/scopes.yaml` and created by `scopes.tf`. All M2M hospital clients receive the `default_scopes` set automatically; `optional_scopes` are registered but not assigned by default.
+Custom client scopes are declared in `config/scopes.yaml` and created by `scopes.tf`. Every scope is registered as optional on every M2M hospital client; none is ever assigned as default — a token only carries the scopes its caller explicitly requested via the token request's `scope` parameter.
 
 Scope names follow the SMART Backend Services convention (`system/{Resource}.{interactions}`). The full list is in [`config/scopes.yaml`](../keycloak/config/scopes.yaml).
 

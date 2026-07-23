@@ -71,7 +71,7 @@ deferral and its revisit condition.
 | "We want a separate client per application" | One client per hospital; all apps of a hospital share one identity. Revisit when the Policy Server arrives | [ADR 0002](../adr/0002-one-client-per-hospital.md) |
 | "Tokens for our FHIR server should only work for us" (per-target `aud`) | `aud` is a constant ecosystem value; target-specific audience binding is deferred until Keycloak supports RFC 8707 non-experimentally | [ADR 0003](../adr/0003-constant-ecosystem-audience.md) |
 | "Only hospitals X and Y should get tokens for our server" (inbound allow-list) | There is no per-hospital allow-list of any kind; FHIR servers are responsible for their own authorization | [ADR 0003](../adr/0003-constant-ecosystem-audience.md) |
-| "Grant scope S only to hospital X" | Scopes are realm-wide: `default_scopes` are assigned to every M2M client, `optional_scopes` are requestable by every client. Per-(caller, target) scope enforcement is a Policy Server concern | [ADR 0002](../adr/0002-one-client-per-hospital.md) |
+| "Grant scope S only to hospital X" | Scopes are realm-wide: every scope in `config/scopes.yaml` is requestable by every M2M client (none is assigned by default). Per-(caller, target) scope enforcement is a Policy Server concern | [ADR 0002](../adr/0002-one-client-per-hospital.md) |
 | "We want mTLS / DPoP (L3)" | L3 is out of scope until specified by the IG; the `auth_level` claim is deferred with it | [ADR 0001](../adr/0001-defer-auth-level-claim.md) |
 
 ---
@@ -163,8 +163,10 @@ obtain tokens accepted anywhere in the ecosystem.
 3. `terraform apply` (see [UC-O4](#uc-o4--rolling-out-a-config-change-per-environment)
    for how this happens per environment). Terraform creates the KC client
    named by `client_id` with service account, `private_key_jwt` auth against
-   the registered `jwks_url`, all `default_scopes`, and the four protocol
-   mappers (`client_id`, org reference, FHIR context, ecosystem audience).
+   the registered `jwks_url`, every scope from `config/scopes.yaml` registered
+   as optional (none assigned by default — see [UC-O2](#uc-o2--adding-or-removing-a-realm-scope)),
+   and the four protocol mappers (`client_id`, org reference, FHIR context,
+   ecosystem audience).
 4. Verify: the hospital acquires a token with its `client_id` and a
    signed client assertion; check the token carries the expected
    `organization_reference` and scopes (see
@@ -271,22 +273,22 @@ is retired.
 1. Edit `scopes.yaml` in your environment's config location (the local
    docker-compose demo's `keycloak/config/scopes.yaml`, or your deployment
    repo's equivalent modeled on [`./argocd-template`](../../argocd-template) —
-   see "Where hospital/scope config actually lives" above):
-   - `default_scopes` — assigned to every hospital client, always present in
-     issued tokens.
-   - `optional_scopes` — registered in the realm; any client may request them
-     explicitly via the `scope` parameter, but they are not included by
-     default.
+   see "Where hospital/scope config actually lives" above): add or remove an
+   entry under `scopes`. Every scope is registered on every hospital client
+   as an optional scope — requestable explicitly via the `scope` parameter,
+   never included unless requested.
 2. PR review and merge, in whichever repo that file lives.
-3. `terraform apply` — new scopes are created and assigned; removed entries
+3. `terraform apply` — new scopes are created and registered; removed entries
    are destroyed together with their client assignments.
 
 **Postcondition:** subsequently issued tokens reflect the change. Tokens
 issued before the apply keep the old scope set until expiry (max 300 s).
 
-**Caution:** scope changes are realm-wide — a new `default_scope` lands in
-*every* hospital's tokens. There is no per-hospital scope assignment
-(see "Requests you must decline" above).
+**Caution:** scope changes are realm-wide — a new scope becomes requestable
+by *every* hospital, and any hospital's existing integration that already
+requests a now-removed scope will get `invalid_scope` on its next token
+request. There is no per-hospital scope assignment (see "Requests you must
+decline" above).
 
 ---
 

@@ -6,13 +6,8 @@
 locals {
   _scopes_config = yamldecode(file("${path.module}/../config/scopes.yaml"))
 
-  # Flat map of all scope definitions (default + optional) by name.
-  all_scope_defs = {
-    for s in concat(
-      local._scopes_config.default_scopes,
-      local._scopes_config.optional_scopes
-    ) : s.name => s
-  }
+  # Flat map of all scope definitions by name.
+  all_scope_defs = { for s in local._scopes_config.scopes : s.name => s }
 }
 
 resource "keycloak_openid_client_scope" "smart" {
@@ -29,9 +24,14 @@ resource "keycloak_openid_client_scope" "smart" {
   consent_screen_text    = ""
 }
 
-# Assign default scopes to every M2M hospital client.
-# These scopes are always present in issued tokens regardless of what the
-# caller requests. Optional scopes are registered in KC but not auto-assigned.
+# No scope is ever included by default. Every scope is registered as
+# optional on every hospital M2M client, so a caller only receives the
+# scopes it explicitly requests via the token request's `scope` parameter —
+# least privilege per request, not per client. default_scopes is pinned to
+# an empty list (rather than omitting the resource) so Terraform actively
+# clears any default-scope assignment Keycloak would otherwise leave on the
+# client (its own realm-level defaults, or a stale assignment from before
+# this scope model existed).
 
 resource "keycloak_openid_client_default_scopes" "m2m" {
   for_each = local.clients_l2
@@ -39,7 +39,7 @@ resource "keycloak_openid_client_default_scopes" "m2m" {
   realm_id  = keycloak_realm.umzh_connect.id
   client_id = keycloak_openid_client.m2m[each.key].id
 
-  default_scopes = [for s in local._scopes_config.default_scopes : s.name]
+  default_scopes = []
 
   depends_on = [keycloak_openid_client_scope.smart]
 }
@@ -52,13 +52,16 @@ resource "keycloak_openid_client_optional_scopes" "m2m" {
 
   # SMART optional scopes (from scopes.yaml). A scope not in this list cannot
   # be requested.
-  optional_scopes = [for s in local._scopes_config.optional_scopes : s.name]
+  optional_scopes = [for s in local._scopes_config.scopes : s.name]
 
-  depends_on = [keycloak_openid_client_scope.smart]
+  # Must apply after default_scopes clears — Keycloak rejects assigning a
+  # scope as optional while it's still attached as a default scope, so the
+  # two updates can't land in either order.
+  depends_on = [keycloak_openid_client_scope.smart, keycloak_openid_client_default_scopes.m2m]
 }
 
-# Same default/optional scope assignment for L1 debug clients (ADR 0004) —
-# a debug client should be a faithful stand-in for the real integration.
+# Same scope assignment for L1 debug clients (ADR 0004) — a debug client
+# should be a faithful stand-in for the real integration.
 
 resource "keycloak_openid_client_default_scopes" "m2m_l1" {
   for_each = local.clients_l1
@@ -66,7 +69,7 @@ resource "keycloak_openid_client_default_scopes" "m2m_l1" {
   realm_id  = keycloak_realm.umzh_connect.id
   client_id = keycloak_openid_client.m2m_l1[each.key].id
 
-  default_scopes = [for s in local._scopes_config.default_scopes : s.name]
+  default_scopes = []
 
   depends_on = [keycloak_openid_client_scope.smart]
 }
@@ -77,7 +80,7 @@ resource "keycloak_openid_client_optional_scopes" "m2m_l1" {
   realm_id  = keycloak_realm.umzh_connect.id
   client_id = keycloak_openid_client.m2m_l1[each.key].id
 
-  optional_scopes = [for s in local._scopes_config.optional_scopes : s.name]
+  optional_scopes = [for s in local._scopes_config.scopes : s.name]
 
-  depends_on = [keycloak_openid_client_scope.smart]
+  depends_on = [keycloak_openid_client_scope.smart, keycloak_openid_client_default_scopes.m2m_l1]
 }
