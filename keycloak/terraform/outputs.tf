@@ -20,18 +20,18 @@ output "jwks_endpoint" {
 
 output "m2m_client_ids" {
   description = "Registered machine-to-machine client IDs (L2, private_key_jwt)."
-  value       = keys(local.hospitals)
+  value       = keys(local.clients_l2)
 }
 
 output "m2m_l1_client_ids" {
   description = "Registered L1 debug client IDs (client_secret). See ADR 0004."
-  value       = [for k in keys(local.hospitals_l1) : "${k}--l1"]
+  value       = keys(local.clients_l1)
 }
 
 output "m2m_l1_client_secrets" {
   description = <<-EOT
-    Keycloak-generated client secrets for L1 debug clients, keyed by hospital
-    org_id. L1 is a debug-only path (ADR 0004) — secret handling is
+    Keycloak-generated client secrets for L1 debug clients, keyed by
+    client_id. L1 is a debug-only path (ADR 0004) — secret handling is
     deliberately relaxed relative to real production secrets: these may be
     copied into a plain committed Secret manifest in tch-umzh-connect-gitops
     (same pattern as keycloak-admin-secret.yaml) rather than routed through

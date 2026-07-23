@@ -120,7 +120,7 @@ To swap this Keycloak into `umzhconnect-sandbox`:
    with this repo's `keycloak/` build (it already contains the mapper — the
    sandbox's `keycloak-mapper-build` service and the `--import-realm` flag and
    realm/provider volume mounts become unnecessary).
-2. Update `keycloak/config/hospitals/*.yaml` with the sandbox JWKS endpoint
+2. Update `keycloak/config/clients-l2/*.yaml` with the sandbox JWKS endpoint
    URLs (e.g. `jwks_url: "http://apisix-placer-external:9080/jwks.json"`),
    then apply:
    ```sh

@@ -24,7 +24,7 @@ authenticates with the hospital's shared client identity via `private_key_jwt`
 (RFC 7523) and receives an access token.
 
 **Actor:** hospital application
-**Precondition:** hospital is onboarded (`config/hospitals/{org_id}.yaml`
+**Precondition:** hospital is onboarded (a `config/clients-l2/*.yaml` file
 exists and Terraform has been applied); the app holds the private key matching
 the JWKS published at the registered `jwks_url`.
 **Request:**
@@ -33,11 +33,11 @@ POST /realms/umzh-connect/protocol/openid-connect/token
 Content-Type: application/x-www-form-urlencoded
 
 grant_type=client_credentials
-&client_id={org_id}
+&client_id={client_id}
 &client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
 &client_assertion=<JWT signed with the hospital's private key>
 ```
-The client assertion must have `iss` = `sub` = `{org_id}` and `aud` = the
+The client assertion must have `iss` = `sub` = `{client_id}` and `aud` = the
 realm token endpoint (RFC 7523 §3).
 
 **Expected token (JWT):**
@@ -47,9 +47,9 @@ realm token endpoint (RFC 7523 §3).
 | header | `typ` | `at+jwt` (RFC 9068 §2.1) |
 | payload | `iss` | realm issuer URL |
 | payload | `aud` | **constant ecosystem value** — the realm issuer URL, identical for every hospital and every target ([ADR 0003](../adr/0003-constant-ecosystem-audience.md)) |
-| payload | `client_id` | `{org_id}` (RFC 9068 §2.2; hardcoded mapper, distinct from `azp`) |
+| payload | `client_id` | `{client_id}` (RFC 9068 §2.2; hardcoded mapper, distinct from `azp`) |
 | payload | `scope` | all `default_scopes` from `config/scopes.yaml` (no `scope` parameter needed) |
-| payload | `extensions.umzhconnect.organization_reference` | the hospital's `org_reference` — set by the AS, never by the caller |
+| payload | `extensions.umzhconnect.organization_reference` | the hospital's `organization_reference` — set by the AS, never by the caller |
 | payload | `extensions.umzhconnect.auth_level` | `"L2"` — hardcoded, required on every token ([ADR 0004](../adr/0004-reinstate-l1-debug-client.md)); resource servers use this to distinguish L2 from an L1 debug token ([UC-T8](#uc-t8--debug-client-acquires-an-l1-token), [UC-R6](#uc-r6--rs-enforces-a-minimum-auth_level)) |
 | payload | `exp` | now + 300 s |
 
@@ -150,16 +150,16 @@ connectivity issues (firewalls, proxies, JWKS reachability) that are harder
 to diagnose through L2's signed-assertion flow.
 
 **Actor:** hospital application (debug/test tooling)
-**Precondition:** `config/hospitals-l1/{org_id}.yaml` exists and Terraform
-has been applied; the hospital holds the Keycloak-generated `client_secret`
-for `{org_id}--l1`.
+**Precondition:** a `config/clients-l1/*.yaml` file exists for the hospital
+and Terraform has been applied; the hospital holds the Keycloak-generated
+`client_secret` for its L1 `client_id` (convention: `{hospital_name}-l1`).
 **Request:**
 ```http
 POST /realms/umzh-connect/protocol/openid-connect/token
 Content-Type: application/x-www-form-urlencoded
 
 grant_type=client_credentials
-&client_id={org_id}--l1
+&client_id={client_id}
 &client_secret=<Keycloak-generated secret>
 ```
 
@@ -168,7 +168,7 @@ grant_type=client_credentials
 
 | Where | Claim | Value |
 |-------|-------|-------|
-| payload | `client_id` | `{org_id}--l1` |
+| payload | `client_id` | the L1 file's `client_id` (convention: `{hospital_name}-l1`) |
 | payload | `extensions.umzhconnect.auth_level` | **`"L1"`** — the signal resource servers use to identify this as a debug token and, if they choose to, reject it for production/clinical data flows ([UC-R6](#uc-r6--rs-enforces-a-minimum-auth_level)) |
 
 `authorization_details` (FHIR context, [UC-T2](#uc-t2--token-with-fhir-context))
@@ -241,7 +241,7 @@ the calling organization, then checks its own authorization (e.g. an active
 FHIR `Consent` for that org). No authorization → HTTP 403.
 
 This claim is trustworthy for that purpose because it is hardcoded per client
-by the AS from the hospital's registered `org_reference` — a caller cannot
+by the AS from the hospital's registered `organization_reference` — a caller cannot
 influence it. Under the current architecture it is the **primary caller-identity
 signal** for resource servers (together with `client_id`), since neither `aud`
 nor `scope` differentiates callers.

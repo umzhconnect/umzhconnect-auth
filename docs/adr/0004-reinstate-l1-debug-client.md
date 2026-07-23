@@ -33,13 +33,14 @@ at the exact class of problem L2 makes hard to isolate.
 the default and the only client provisioned unless a hospital separately
 opts into L1.**
 
-- A new config directory, `keycloak/config/hospitals-l1/{org_id}.yaml`,
-  independent of `keycloak/config/hospitals/{org_id}.yaml`. Presence of this
+- A new config directory, `keycloak/config/clients-l1/*.yaml`,
+  independent of `keycloak/config/clients-l2/*.yaml`. Presence of this
   file is the only gate — a hospital may have an L1 file, an L2 file, both,
   or neither. There is no requirement that the L2 file exist first: a
   hospital may start on L1 while debugging and move to L2 later, or run both
   side by side indefinitely.
-- KC client ID `{org_id}--l1`, `client_authenticator_type = "client-secret"`,
+- KC client ID sourced from the file's own `client_id` field (convention:
+  `{hospital}-l1`), `client_authenticator_type = "client-secret"`,
   `service_accounts_enabled = true`. Same mapper set as
   the L2 client (`client-id-mapper`, `org-reference-mapper`,
   `fhir-context-mapper`, `ecosystem-audience-mapper`, `auth-level-mapper`),
@@ -94,9 +95,9 @@ opts into L1.**
 
 ## Consequences
 
-- A hospital can have up to two KC clients: `{org_id}` (L2, default) and
-  `{org_id}--l1` (L1, opt-in). Onboarding is unchanged for hospitals that
-  don't request L1.
+- A hospital can have up to two KC clients: its L2 client (default) and its
+  L1 debug client (opt-in, conventionally `{hospital}-l1`). Onboarding is
+  unchanged for hospitals that don't request L1.
 - Every access token now carries a required `auth_level` claim (`"L1"` or
   `"L2"`) distinguishing L1 from L2. Any resource server wanting to reject
   L1 tokens (e.g. treat L1 as debug-only and refuse it for real clinical
@@ -110,7 +111,7 @@ opts into L1.**
   project. This is an accepted, scoped risk tied to L1's debug-only purpose,
   not a general secret-hygiene downgrade.
 - Revoking L1 access is symmetric with revoking a hospital entirely: delete
-  `config/hospitals-l1/{org_id}.yaml` and `terraform apply`.
+  the hospital's `config/clients-l1/*.yaml` file and `terraform apply`.
 
 ---
 

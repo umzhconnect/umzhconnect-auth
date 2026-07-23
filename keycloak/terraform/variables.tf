@@ -28,8 +28,8 @@ variable "environment" {
   default     = "dev"
 }
 
-# Gates local.hospitals_l1 in clients.tf: when false (the default), any
-# config/hospitals-l1/*.yaml file present is ignored — no L1 client is
+# Gates local.clients_l1 in clients.tf: when false (the default), any
+# config/clients-l1/*.yaml file present is ignored — no L1 client is
 # created for it, and a "l1_debug_clients_ignored" check block emits a
 # warning (terraform apply still succeeds) naming the ignored file(s).
 # Defaults to false so provisioning an L1 (client_secret) debug client
@@ -41,7 +41,7 @@ variable "environment" {
 # See ADR 0004 (docs/adr/0004-reinstate-l1-debug-client.md) and CLAUDE.md's
 # "L1 only as an explicit opt-in debug client" rule.
 variable "allow_l1_debug_clients" {
-  description = "Explicit opt-in permitting L1 (client_secret) debug clients to be provisioned. False (default) silently ignores config/hospitals-l1/*.yaml files (with a warning), in every environment including local dev — set to true via TF_VAR_allow_l1_debug_clients or tfvars to enable them."
+  description = "Explicit opt-in permitting L1 (client_secret) debug clients to be provisioned. False (default) silently ignores config/clients-l1/*.yaml files (with a warning), in every environment including local dev — set to true via TF_VAR_allow_l1_debug_clients or tfvars to enable them."
   type        = bool
   default     = false
 }

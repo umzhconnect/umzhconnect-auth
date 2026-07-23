@@ -1,5 +1,0 @@
-org_id: "hospital-b"
-org_display_name: "Hospital B"
-org_reference: "https://fhir.hospital-b.example/fhir/Organization/HospitalB"
-fhir_url: "https://fhir.hospital-b.example/fhir"
-jwks_url: "http://jwks-server/.well-known/hospital-b.jwks.json"

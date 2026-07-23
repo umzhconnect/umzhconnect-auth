@@ -45,11 +45,11 @@ If Bruno cannot resolve the demo key path, set the `l2KeysDir` variable in `brun
 
 ## Hospital C: onboarded but unreachable jwks_url (`negative/10-unreachable-jwks-hospital-c.bru`)
 
-`config/hospitals/hospital-c.yaml` onboards a third demo hospital, but its `jwks_url` points at a real external host (`https://hospital-c.example/...`), not `jwks-server` — there's no matching `keys/hospital-c.key` in this repo. The pre-request script generates a throwaway RSA keypair with `crypto.generateKeyPairSync` (no file to read) purely to produce a syntactically valid assertion; the request still fails because Keycloak can't reach `hospital-c.example` to fetch/verify against in the first place.
+`config/clients-l2/hospital_c-l2.yaml` onboards a third demo hospital, but its `jwks_url` points at a real external host (`https://hospital-c.example/...`), not `jwks-server` — there's no matching `keys/hospital-c.key` in this repo. The pre-request script generates a throwaway RSA keypair with `crypto.generateKeyPairSync` (no file to read) purely to produce a syntactically valid assertion; the request still fails because Keycloak can't reach `hospital-c.example` to fetch/verify against in the first place.
 
 ## L1 debug token (`09-get-placer-token-l1.bru`)
 
-Exercises the opt-in L1 (`client_secret`) debug client from [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md) — not the production path (see CLAUDE.md's "Production default is L2" rule). Needs `keycloak/config/hospitals-l1/hospital-a.yaml` to exist and `terraform apply` to have run; the client secret is Keycloak-generated (not a demo key in this repo), so fetch it with `terraform output -json m2m_l1_client_secrets` and set `placerL1ClientSecret` in the `local` environment. Unlike the L2 requests, no pre-request signing script is needed, so it works in either Bruno sandbox.
+Exercises the opt-in L1 (`client_secret`) debug client from [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md) — not the production path (see CLAUDE.md's "Production default is L2" rule). Needs `keycloak/config/clients-l1/hospital_a-l1.yaml` to exist and `terraform apply` to have run; the client secret is Keycloak-generated (not a demo key in this repo), so fetch it with `terraform output -json m2m_l1_client_secrets` and set `placerL1ClientSecret` in the `local` environment. Unlike the L2 requests, no pre-request signing script is needed, so it works in either Bruno sandbox.
 
 ## Keep `docs` blocks in sync
 

@@ -7,6 +7,7 @@
 # Kept flat (not under a clients/ subdirectory) because kustomize's
 # configMapGenerator keys ConfigMap entries by basename only - it can't
 # preserve a nested directory structure across the mount.
-org_id: "example-client"
-org_display_name: "Example Client"
+client_id: "example_client-l2"
+client_name: "Example Client"
 jwks_url: "https://jwks.example-client.example/.well-known/jwks.json"
+auth_level: "L2"

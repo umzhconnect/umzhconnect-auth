@@ -34,7 +34,7 @@ resource "keycloak_openid_client_scope" "smart" {
 # caller requests. Optional scopes are registered in KC but not auto-assigned.
 
 resource "keycloak_openid_client_default_scopes" "m2m" {
-  for_each = local.hospitals
+  for_each = local.clients_l2
 
   realm_id  = keycloak_realm.umzh_connect.id
   client_id = keycloak_openid_client.m2m[each.key].id
@@ -45,7 +45,7 @@ resource "keycloak_openid_client_default_scopes" "m2m" {
 }
 
 resource "keycloak_openid_client_optional_scopes" "m2m" {
-  for_each = local.hospitals
+  for_each = local.clients_l2
 
   realm_id  = keycloak_realm.umzh_connect.id
   client_id = keycloak_openid_client.m2m[each.key].id
@@ -61,7 +61,7 @@ resource "keycloak_openid_client_optional_scopes" "m2m" {
 # a debug client should be a faithful stand-in for the real integration.
 
 resource "keycloak_openid_client_default_scopes" "m2m_l1" {
-  for_each = local.hospitals_l1
+  for_each = local.clients_l1
 
   realm_id  = keycloak_realm.umzh_connect.id
   client_id = keycloak_openid_client.m2m_l1[each.key].id
@@ -72,7 +72,7 @@ resource "keycloak_openid_client_default_scopes" "m2m_l1" {
 }
 
 resource "keycloak_openid_client_optional_scopes" "m2m_l1" {
-  for_each = local.hospitals_l1
+  for_each = local.clients_l1
 
   realm_id  = keycloak_realm.umzh_connect.id
   client_id = keycloak_openid_client.m2m_l1[each.key].id
