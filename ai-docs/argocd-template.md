@@ -20,6 +20,17 @@ derived from), see [ai-docs/umzh-connect-gitops.md](umzh-connect-gitops.md)
 and [ai-docs/infrastructure.md](infrastructure.md) — those describe the real
 manifests living in the separate `tch-umzh-connect-gitops` repo.
 
+`keycloak-config-job.yaml`'s script copies the `configMapGenerator`-injected
+files from `/config` onto the `tf-workspace` PVC with `cp -rfL` — the `-L` is
+required, not cosmetic. Kubernetes projects each ConfigMap key as a symlink
+(`scopes.yaml -> ..data/scopes.yaml`); the `hashicorp/terraform` image is
+Alpine/busybox-based, and busybox `cp` copies symlinks as symlinks by
+default (unlike GNU coreutils `cp`, which dereferences top-level symlink
+arguments). Without `-L`, the copied symlink is dangling in its new
+directory (no `../data/` there) and Terraform's `file()` call fails with
+"no file exists at ../config/scopes.yaml" even though the ConfigMap and
+source YAML are both correct.
+
 Validate the template still kustomize-builds after any edit:
 
 ```sh

@@ -62,7 +62,7 @@ spec:
             - |
               mkdir -p /workspace/terraform /workspace/config
               cp -rf /src/terraform/. /workspace/terraform/
-              cp -rf /config/* /workspace/config/
+              cp -rfL /config/* /workspace/config/
               terraform init -input=false
               terraform apply -auto-approve -input=false
           env:
