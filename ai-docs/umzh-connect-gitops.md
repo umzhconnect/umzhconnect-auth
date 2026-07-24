@@ -1,11 +1,13 @@
 ---
-recap: "Dev Kubernetes/ArgoCD deployment record spanning three repos — this repo builds images only, tch-umzh-connect-gitops holds all ArgoCD/k8s manifests, tch-syseng-argocd-gitops holds the Application CR. Covers the compose-to-k8s translation, why config crosses the repo boundary as baked images rather than ConfigMaps, and what's still outstanding."
-keywords: [tch-umzh-connect-gitops, tch-syseng-argocd-gitops, argocd, kustomization.yaml, kgateway, Gateway, HTTPRoute, postgres-operator, postgresql.acid.zalan.do, umzh-connect namespace, auth.umzh.dev.example.com, tf-workspace, tf-config, ci-keycloak.yml, ci-token-validator.yml, ci-tf-config.yml, ci-jwks-server.yml, argocd-image-updater, deploy key, write-back]
+recap: "Dev Kubernetes/ArgoCD deployment record spanning three repos — this repo builds images only, tch-umzh-connect-gitops holds all ArgoCD/k8s manifests plus its own configurator/keycloak-config layer, tch-syseng-argocd-gitops holds the Application CR. Covers the compose-to-k8s translation, why config crosses the repo boundary as baked images rather than ConfigMaps, the gitops repo's own configurator image for deployment-specific client onboarding, and what's still outstanding."
+keywords: [tch-umzh-connect-gitops, tch-syseng-argocd-gitops, argocd, kustomization.yaml, kgateway, Gateway, HTTPRoute, postgres-operator, postgresql.acid.zalan.do, umzh-connect namespace, auth.umzh.dev.example.com, tf-workspace, tf-config, configurator, configurator/Dockerfile, keycloak-config, ci-keycloak.yml, ci-token-validator.yml, ci-tf-config.yml, ci-jwks-server.yml, ci-configurator.yml, GHCR_PULL_TOKEN, allow_l1_debug_clients, argocd-image-updater, deploy key, write-back, trafficpolicy-ip-whitelist]
 ---
 
 # UMZH Connect Auth Server — dev k8s deployment
 
-Status as of 2026-07-03. This doc is the resumable record of the dev
+Status as of 2026-07-24 (see "Update 2026-07-24" below for what changed
+since the original 2026-07-03 write-up — the rest of this doc is otherwise
+left as originally written). This doc is the resumable record of the dev
 Kubernetes/ArgoCD deployment work spanning three repos. If you're picking
 this up in a fresh session, read this file first — it has every decision,
 exact name/value, file location, and what's still outstanding.
@@ -25,6 +27,66 @@ separate **`tch-umzh-connect-gitops`** repo. That split happened after the
 first version of this work (which put `argocd/` + `kustomization.yaml`
 directly in this repo) — see "Why the gitops repo is separate" below for why,
 and "History" at the bottom for the superseded approach.
+
+---
+
+## Update 2026-07-24: the gitops repo grew its own configurator layer
+
+Everything above (and the sections below, except where noted) describes the
+state as of 2026-07-03, when config crossed the repo boundary by baking
+`keycloak/terraform` + `keycloak/config` from *this* repo into the
+`tf-config` image. `tch-umzh-connect-gitops` has since gone one step
+further and added its **own** config layer on top, for deployment-specific
+clients that shouldn't live in this repo's own `keycloak/config/` at all:
+
+- **`tch-umzh-connect-gitops` now has a top-level `configurator/` and
+  `keycloak-config/`**, alongside `argocd/`. `configurator/Dockerfile` is
+  `FROM ghcr.io/trifork/tch-umzh-connect-authentication-server-tf-config:latest`
+  + `COPY keycloak-config/. /src/config` — it overwrites `/src/config` from
+  the `tf-config` image with the gitops repo's own client/scope files. A new
+  `ci-configurator.yml` (same shared `build-image.yml` template as the other
+  four images) builds and pushes it as
+  `ghcr.io/trifork/tch-umzh-connect-gitops-configurator`, triggered on
+  changes under `configurator/**` or `keycloak-config/**`.
+- Because the `configurator` Dockerfile's `FROM` pulls a *private* image
+  from a *different* repo (this one), `GITHUB_TOKEN` alone can't authenticate
+  (it only reads packages published by the calling repo) — `ci-configurator.yml`
+  logs in with a PAT secret (`GHCR_PULL_TOKEN`, needs both `read:packages`
+  and `write:packages` since the same login also pushes the built image).
+- **`argocd/keycloak-config-job.yaml` now runs the `configurator` image
+  directly**, not `tf-config` — both `/src/terraform` and `/src/config` are
+  already present in it, so the copy step is just
+  `cp -rf /src/terraform/. /workspace/terraform/` +
+  `cp -rf /src/config/. /workspace/config/`. `argocd/kustomization.yaml`'s
+  `images:` list now pins `...gitops-configurator` (by digest) instead of
+  `...authentication-server-tf-config`.
+- **`keycloak-config/clients/` currently has**: `hospital_a-l2.yaml`,
+  `hospital_b-l2.yaml`, `hospital_c-l2.yaml` (mirroring this repo's own
+  `keycloak/config/clients/`), plus two dev-deployment-only additions that
+  live *only* in the gitops repo: `hospital_d-l2.yaml` (`enabled: false` — a
+  disabled fake client kept around for exercising the
+  [client-enabled-flag](../keycloak/config/clients) config path without a
+  real hospital) and `usz-l1.yaml` (an `auth_level: "L1"` debug client,
+  requested by USZ per [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md)).
+- `keycloak-config-job.yaml`'s Job env now sets
+  `TF_VAR_allow_l1_debug_clients: "true"`, the opt-in ADR 0004 requires
+  before Terraform will provision any `auth_level: "L1"` file — needed for
+  `usz-l1.yaml` above to actually take effect.
+- `hook-delete-policy` on the Job now reads `BeforeHookCreation` only (the
+  `HookSucceeded` half mentioned in "History" below has since been dropped
+  deliberately, so the most recently finished Job — success or failure —
+  stays inspectable until the next sync's `BeforeHookCreation` clears it).
+- `argocd-template/` in this repo has been updated to mirror this pattern
+  (`configurator/Dockerfile`, top-level `keycloak-config/`, an
+  `example_client-l1.yaml` demoing the ADR 0004 opt-in) — see
+  [ai-docs/argocd-template.md](argocd-template.md).
+
+Net effect: this repo's own `tf-config` image is no longer the image
+actually deployed by `keycloak-config-job.yaml` — it's now an intermediate
+base image, one layer removed from what runs. Anything below this section
+that still says "the `tf-config` image" for the *deployed* Job image is
+describing the superseded 2026-07-03 state; the `configurator` image is
+current.
 
 ---
 
@@ -288,9 +350,13 @@ why the Job used to need an initContainer at all):
   entry from — the `tf-config` image's `COPY keycloak/config /src/config`
   copies the whole directory.
 - Other gotchas from that version (PostSync hook needing a fixed Job `name`,
-  the `hook-delete-policy` needing `BeforeHookCreation,HookSucceeded` not just
-  `HookSucceeded`, bare image refs with no tag for `argocd-image-updater`)
+  needing `hook-delete-policy: BeforeHookCreation` explicitly since
+  specifying the annotation at all replaces ArgoCD's default rather than
+  adding to it, bare image refs with no tag for `argocd-image-updater`)
   still apply unchanged to the current manifests in `tch-umzh-connect-gitops`.
+  One detail *has* since changed, though: `hook-delete-policy` originally
+  also included `HookSucceeded`; that's since been dropped (see "Update
+  2026-07-24" above) so the most recent Job run stays inspectable.
 
 ---
 
