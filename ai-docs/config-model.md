@@ -1,6 +1,6 @@
 ---
 recap: "YAML-driven config model — client_id-keyed config files under config/clients/ (plus config/scopes.yaml) that drive KC client generation via Terraform. Whether a file is L1 or L2 is determined by its own auth_level field, not by directory. Filenames are a convention only; client_id and auth_level in the file content are what Terraform actually reads."
-keywords: [config/clients, config/scopes.yaml, client_id, auth_level, fhir_url, jwks_url, organization_reference, client_name, optional_scopes, least privilege per request, scopes.tf, clients.tf, ecosystem-audience-mapper, onboarding, terraform apply, terraform_data client_config_guard, lifecycle precondition, ADR 0002, ADR 0003, ADR 0004]
+keywords: [config/clients, config/scopes.yaml, client_id, auth_level, enabled, fhir_url, jwks_url, organization_reference, client_name, optional_scopes, least privilege per request, scopes.tf, clients.tf, ecosystem-audience-mapper, onboarding, terraform apply, terraform_data client_config_guard, lifecycle precondition, ADR 0002, ADR 0003, ADR 0004]
 ---
 
 # Config model
@@ -47,6 +47,7 @@ auth_level: "L2"
 | `fhir_url` | Base URL of this hospital's FHIR server. Not currently written into `aud` — see [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) (`aud` is a constant ecosystem value, not per-hospital) |
 | `jwks_url` | Public JWKS endpoint KC uses to verify `private_key_jwt` assertions. Independent of `client_id` — see the local demo setup in `keys/README.md` |
 | `auth_level` | Must be `"L2"` for an L2 file. Written straight through into the `extensions.umzhconnect.auth_level` claim (no case conversion). This field (not the directory or filename) is what Terraform uses to route the file into `local.clients_l2`; the `terraform_data.client_config_guard` precondition (`clients.tf`) hard-fails `terraform apply` if any file's `auth_level` is neither `"L1"` nor `"L2"` |
+| `enabled` | Optional, defaults to `true` if absent. Maps straight to KC's client-level `enabled` flag (`try(each.value.enabled, true)` in `clients.tf`) — distinct from `access_type`/`client_authenticator_type`. Set `enabled: false` to temporarily block a client from obtaining tokens without deleting the file or touching its credentials; flip back to `true` (or remove the line) to re-enable |
 
 Terraform creates one KC client per file:
 - `{client_id}` — the M2M client (L2 `private_key_jwt`, service account enabled)
@@ -72,6 +73,7 @@ Key points:
 - No `jwks_url` — authenticates with a Keycloak-generated `client_secret`, not `private_key_jwt`.
 - `auth_level` must be `"L1"` — this is what routes the file into `local.clients_l1_all`/`local.clients_l1` rather than `local.clients_l2`; the same `terraform_data.client_config_guard` enforcement applies repo-wide (see the directory layout section above).
 - No audit-metadata fields (`reason`/`requested_by`/`requested_date` from an earlier revision of this schema have been dropped).
+- `enabled` (optional, defaults to `true`) works the same as on L2 files — see the L2 field table above. For L1 in particular this preserves the Keycloak-generated `client_secret` across a temporary disable, where deleting the file would destroy it.
 - Terraform creates `{client_id}` with the same mapper set as an L2 client (`client-id-mapper`, `org-reference-mapper`, `fhir-context-mapper`, `ecosystem-audience-mapper`, `auth-level-mapper`) so resource servers can distinguish them via the `auth_level` claim.
 - Secret handling is deliberately relaxed relative to real production secrets — see ADR 0004.
 - Revoke the same way as a hospital: delete the file, `terraform apply`.
@@ -105,3 +107,7 @@ To add a scope: add an entry to `config/scopes.yaml` and run `terraform apply`. 
 ## Revoking access
 
 To decommission a hospital entirely: delete its L2 file from `config/clients/` and run `terraform apply`. There is no allow-list to clean up elsewhere.
+
+## Temporarily disabling a client
+
+To block a client from obtaining tokens without deleting its file or regenerating its `client_id`/`client_secret`: set `enabled: false` in its `config/clients/*.yaml` file and run `terraform apply`. Re-enable by removing the line (or setting it back to `true`) and applying again. Works the same for L1 and L2. This is the config-driven alternative to disabling via `kcadm`/the admin console, which this repo's clients are never meant to be hand-edited through.

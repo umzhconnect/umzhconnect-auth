@@ -440,6 +440,38 @@ issued remain valid until expiry (max 300 s); for anything faster see
 
 ---
 
+### UC-L2a — Temporarily disabling a client
+
+A client needs to stop obtaining tokens for a bounded period — planned
+maintenance, or a suspected-but-unconfirmed issue that doesn't yet warrant
+full offboarding ([UC-L2](#uc-l2--offboarding-a-hospital)) or the emergency
+compromise response ([UC-L3](#uc-l3--compromise-response-immediately-block-a-hospital)) —
+while preserving the client's `client_id` and, for L1, its `client_secret`,
+so re-enabling later requires no coordination with the hospital.
+
+**Actor:** platform operator
+**Trigger:** planned pause, or an issue under investigation that doesn't yet
+justify offboarding
+
+**Steps:**
+1. Edit the client's file in `config/clients/` (either L1 or L2) in your
+   environment's hospital config location (see "Where hospital/scope config
+   actually lives" above): add `enabled: false`.
+2. PR review and merge, in whichever repo that file lives.
+3. `terraform apply` — sets the KC client's own `enabled` flag off. Unlike
+   deleting the file ([UC-L2](#uc-l2--offboarding-a-hospital)), this leaves
+   `client_id`, `client_secret` (L1), mappers, and every other property
+   untouched.
+4. Verify: a token request for this client is rejected.
+
+**To re-enable:** remove the `enabled: false` line (or set it to `true`) and
+`terraform apply` again — same `client_id`/credentials, no re-onboarding.
+
+**Postcondition:** new token requests for this client are rejected
+immediately; tokens already issued remain valid until expiry (max 300 s).
+
+---
+
 ### UC-L3 — Compromise response: immediately block a hospital
 
 A hospital's signing key is suspected compromised and its access must stop
@@ -449,12 +481,17 @@ faster than the normal PR + apply cycle.
 **Trigger:** security incident
 
 **Options, fastest first:**
-- **Disable the KC client** — set `enabled = false` on the client. For speed
-  this may be done in the KC admin console *as a documented emergency
-  exception* to the no-manual-changes rule — but it must be immediately
-  followed by the same change in Terraform (add `enabled = false` handling or
-  remove the hospital YAML and apply), otherwise the next `terraform apply`
-  silently re-enables the client.
+- **Disable via config, expedited** — add `enabled: false` to the client's
+  `config/clients/*.yaml` file ([UC-L2a](#uc-l2a--temporarily-disabling-a-client))
+  and fast-track the PR + `terraform apply`. This is the normal, VCS-tracked
+  path — prefer it even under incident time pressure.
+- **Disable in the KC admin console, as a documented emergency exception** —
+  only if the config-driven path above is not fast enough for the incident.
+  Set the client's `enabled` flag off directly in KC. This *must* be
+  immediately followed by adding `enabled: false` to the same client's YAML
+  file and applying, otherwise the next unrelated `terraform apply` silently
+  re-enables the client (Terraform's `enabled` still reads as `true` from the
+  file).
 - **Offboard via config** — [UC-L2](#uc-l2--offboarding-a-hospital) with an
   expedited merge.
 

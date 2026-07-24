@@ -44,3 +44,20 @@ authenticates with a Keycloak-generated `client_secret`, not
 a warning), not provisioned.
 
 To revoke access for either level: delete the file and `terraform apply`.
+
+## `enabled` — optional, defaults to `true`
+
+Both L1 and L2 files accept an optional `enabled: false` to temporarily
+disable a client without deleting the file. Unlike deleting the file (which
+destroys the KC client and, for L1, its `client_secret`), `enabled: false`
+maps straight to Keycloak's own client-level enabled flag — the client,
+its `client_id`, and (for L1) its `client_secret` are all preserved
+untouched, and re-enabling is just flipping it back to `true` (or removing
+the line) and re-applying.
+
+```yaml
+client_id: "hospital_a-l1"
+...
+auth_level: "L1"
+enabled: false
+```

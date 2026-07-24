@@ -101,7 +101,7 @@ resource "keycloak_openid_client" "m2m" {
   realm_id  = keycloak_realm.umzh_connect.id
   client_id = each.key
   name      = each.value.client_name
-  enabled   = true
+  enabled   = try(each.value.enabled, true)
 
   access_type                  = "CONFIDENTIAL"
   service_accounts_enabled     = true
@@ -235,7 +235,7 @@ resource "keycloak_openid_client" "m2m_l1" {
   realm_id  = keycloak_realm.umzh_connect.id
   client_id = each.key
   name      = "${each.value.client_name} (L1 debug)"
-  enabled   = true
+  enabled   = try(each.value.enabled, true)
 
   access_type                  = "CONFIDENTIAL"
   service_accounts_enabled     = true
