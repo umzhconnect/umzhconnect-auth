@@ -25,17 +25,24 @@ configurator job — the smallest set needed to get a working realm:
 | `keycloak.yaml` | Keycloak `Deployment` + `Service` |
 | `keycloak-config-job.yaml` | PostSync `Job` (+ PVC) that runs `terraform apply` against the running Keycloak to provision the realm |
 | `keycloak_config/scopes.yaml` | Example client-scope config, read by Terraform |
-| `keycloak_config/example-client.yaml` | Example per-client onboarding file, read by Terraform |
-| `kustomization.yaml` | Wires the above together, including the `configMapGenerator` the configurator job mounts |
+| `keycloak_config/clients/example_client-l2.yaml` | Example per-client onboarding file, read by Terraform — mirrors `keycloak/config/clients/*.yaml` in the main repo |
+| `kustomization.yaml` | Wires the above together, including the two `configMapGenerator`s the configurator job mounts |
 
 Note the two config sources are deliberately different: Terraform's own
 `.tf` files are baked into the `tf-config` image (`/src`), while the
-client/scope YAML under `keycloak_config/` travels as a kustomize
-`configMapGenerator` mounted flat at `/config` — kept out of the image so
-onboarding a new client doesn't require a rebuild. `configMapGenerator` keys
-ConfigMap entries by basename only, so files here can't live in
-subdirectories (e.g. no `clients/` folder) — see the comment in
-`example-client.yaml`.
+client/scope YAML under `keycloak_config/` travels as two separate kustomize
+`configMapGenerator`s — kept out of the image so onboarding a new client
+doesn't require a rebuild. They're split in two (`example-app-scopes-config`
+for `scopes.yaml`, `example-app-clients-config` for everything under
+`clients/`) because `configMapGenerator` keys ConfigMap entries by basename
+only and can't preserve a nested directory structure — mounting them as two
+separate ConfigMap volumes in `keycloak-config-job.yaml`
+(`.../config-source/scopes.yaml` + `.../config-source/clients/`) is what
+reconstructs the `config/scopes.yaml` + `config/clients/*.yaml` split
+Terraform expects. `configMapGenerator.files` also has no glob or
+whole-directory form (verified against kustomize v5.8.1 — both a directory
+path and a `*.yaml` glob fail with "must resolve to a file"), so each client
+file must still be listed individually in `kustomization.yaml`.
 
 ## What's deliberately left out
 
@@ -55,8 +62,11 @@ subdirectories (e.g. no `clients/` folder) — see the comment in
    `tf-config/Dockerfile` in this repo for the pattern: bake your Terraform
    `.tf` files into an image so the gitops repo doesn't need read access
    to your source repo).
-3. Add one file per client under `keycloak_config/` for each client you
-   want to onboard — there is no implicit access, a client with no file has
-   no KC client and cannot obtain tokens. Also add it to `kustomization.yaml`'s
-   `configMapGenerator.files` list.
+3. Add one file per client under `keycloak_config/clients/` for each client
+   you want to onboard, named after its own `client_id`
+   (`{name}-{l1|l2}.yaml`, e.g. `hospital_a-l2.yaml`) — there is no implicit
+   access, a client with no file has no KC client and cannot obtain tokens.
+   Also add its path to the `example-app-clients-config` generator's
+   `files` list in `kustomization.yaml` — kustomize can't glob or list a
+   whole directory here, so this second edit can't be avoided.
 4. Verify with `kubectl kustomize .` before committing to a gitops repo.

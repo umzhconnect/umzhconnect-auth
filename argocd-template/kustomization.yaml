@@ -7,11 +7,28 @@ resources:
   - database.yaml
   - keycloak.yaml
   - keycloak-config-job.yaml
+# Two separate generators, not one: configMapGenerator flattens every
+# source into ConfigMap keys with no subdirectories, so scopes.yaml and the
+# clients/ files can't share one ConfigMap without losing the clients/
+# nesting. Keeping them apart lets keycloak-config-job.yaml mount the
+# clients ConfigMap straight at .../config/clients, matching
+# keycloak/config/clients/ in the main repo.
+#
+# configMapGenerator.files does NOT support a directory or glob entry
+# (verified against kustomize v5.8.1: both "keycloak_config/clients/" and
+# "keycloak_config/clients/*.yaml" fail with "must resolve to a file") -
+# each file must be listed individually. Onboarding a new client therefore
+# still means two edits: add the YAML under keycloak_config/clients/, *and*
+# add its path to the clients-config files list below.
 configMapGenerator:
-  - name: example-app-config
+  - name: example-app-scopes-config
     files:
       - keycloak_config/scopes.yaml
-      - keycloak_config/example-client.yaml
+    options:
+      disableNameSuffixHash: true
+  - name: example-app-clients-config
+    files:
+      - keycloak_config/clients/example_client-l2.yaml
     options:
       disableNameSuffixHash: true
 # argocd-image-updater (write-back-target: kustomization) rewrites the tags
