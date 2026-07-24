@@ -128,7 +128,7 @@ issuer (`KC_HOSTNAME`) and token-validator's `ISSUER` env are the public
 - Postgres credentials Secret (operator-managed): `keycloak.umzh-connect-db.credentials.postgresql.acid.zalan.do`
 - Keycloak admin Secret: `keycloak-admin` (keys `admin-username`/`admin-password`, dev-only plaintext `admin`/`admin`)
 - GHCR pull secret: `regcred` (ExternalSecret from the org's secrets manager) — now also mounted by `jwks-server` and `keycloak-config` (their images are private GHCR images too, unlike the old `nginx:1.27-alpine`/`alpine:3.20`/`hashicorp/terraform:1.9` public bases)
-- jwks-server Service: `jwks-server`, port `80` — matches what's already baked into `keycloak/config/clients-l2/hospital_{a,b}-l2.yaml` (`jwks_url: http://jwks-server/...`), confirmed by grep
+- jwks-server Service: `jwks-server`, port `80` — matches what's already baked into `keycloak/config/clients/hospital_{a,b}-l2.yaml` (`jwks_url: http://jwks-server/...`), confirmed by grep
 - token-validator Service: `token-validator`, port `8086`
 - TF workspace PVC: `tf-workspace` (1Gi), Job name `keycloak-config`
 - Public dev issuer: `https://auth.umzh.dev.example.com` → `https://auth.umzh.dev.example.com/realms/umzh-connect`
@@ -207,7 +207,7 @@ cd <path-to>/tch-syseng-argocd-gitops/argocd/overlays/dev/applications
 kubectl kustomize . > /tmp/apps.yaml && echo OK
 
 # jwks_url values already match the in-cluster service name
-grep -rn "jwks_url" keycloak/config/clients-l2/
+grep -rn "jwks_url" keycloak/config/clients/
 
 # No stray .tfvars files that would be missing from the tf-config image
 ls keycloak/terraform/*.tfvars 2>/dev/null || echo none

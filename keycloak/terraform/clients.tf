@@ -5,16 +5,17 @@
 # never derives either from a filename. Filenames are a documentation
 # convention only (recommended: name the file after client_id).
 #
-# L2 clients live in keycloak/config/clients-l2/*.yaml. A hospital with no
-# such file has no L2 KC client and cannot obtain tokens via the standard
-# path.
+# All client files — both L1 and L2 — live together in
+# keycloak/config/clients/*.yaml; each file's own auth_level field (not its
+# filename or directory) determines whether it's an L2 or L1 client. A
+# hospital with no L2 file has no L2 KC client and cannot obtain tokens via
+# the standard path.
 #
-# L1 debug clients live in keycloak/config/clients-l1/*.yaml and are
-# entirely independent of the L2 client for the same hospital — a hospital
-# may have an L1 file, an L2 file, both, or neither. L1 exists for hospitals
-# to debug connectivity (firewalls, routing, JWKS reachability) before or
-# instead of standing up the full L2 private_key_jwt flow. See
-# docs/adr/0004-reinstate-l1-debug-client.md.
+# L1 debug clients are entirely independent of the L2 client for the same
+# hospital — a hospital may have an L1 file, an L2 file, both, or neither.
+# L1 exists for hospitals to debug connectivity (firewalls, routing, JWKS
+# reachability) before or instead of standing up the full L2 private_key_jwt
+# flow. See docs/adr/0004-reinstate-l1-debug-client.md.
 #
 # Audience binding (ADR 0003):
 # - Every M2M client's tokens carry a constant "aud" identifying the
@@ -30,30 +31,63 @@
 #     docs/adr/0004-reinstate-l1-debug-client.md
 
 locals {
-  _clients_l2_files = fileset("${path.module}/../config/clients-l2", "*.yaml")
-  _clients_l2_list  = [for f in local._clients_l2_files : yamldecode(file("${path.module}/../config/clients-l2/${f}"))]
-  clients_l2        = { for c in local._clients_l2_list : c.client_id => c }
+  _client_files = fileset("${path.module}/../config/clients", "*.yaml")
+  _client_list  = [for f in local._client_files : yamldecode(file("${path.module}/../config/clients/${f}"))]
 
-  _clients_l1_files = fileset("${path.module}/../config/clients-l1", "*.yaml")
-  _clients_l1_list  = [for f in local._clients_l1_files : yamldecode(file("${path.module}/../config/clients-l1/${f}"))]
-  # Raw contents of every config/clients-l1/*.yaml file, regardless of
-  # allow_l1_debug_clients — used by the check block below to warn about
-  # files that exist but are being ignored.
-  clients_l1_all = { for c in local._clients_l1_list : c.client_id => c }
+  # Grouped by client_id using the "..." collector — unlike a plain
+  # {for c in list : c.client_id => c} map, this doesn't hard-error on a
+  # duplicate key, so the precondition below can report a clear, actionable
+  # message instead of Terraform's generic "Duplicate object key" error.
+  _clients_grouped      = { for c in local._client_list : c.client_id => c... }
+  _duplicate_client_ids = [for id, cs in local._clients_grouped : id if length(cs) > 1]
+  clients_by_id         = { for id, cs in local._clients_grouped : id => cs[0] }
+
+  clients_l2 = { for k, c in local.clients_by_id : k => c if c.auth_level == "L2" }
+
+  # Raw L1 entries, regardless of allow_l1_debug_clients — used by the check
+  # block below to warn about files that exist but are being ignored.
+  clients_l1_all = { for k, c in local.clients_by_id : k => c if c.auth_level == "L1" }
   # Actually provisioned L1 clients — empty unless allow_l1_debug_clients is
-  # explicitly true, so a clients-l1/*.yaml file present without that
+  # explicitly true, so an auth_level: "L1" file present without that
   # opt-in is silently ignored (with a warning) rather than provisioned or
   # failing the apply. See the "L1 debug clients" section below.
   clients_l1 = var.allow_l1_debug_clients ? local.clients_l1_all : {}
 }
 
-# Warns (does not fail apply) when config/clients-l1/ has file(s) but
+# Repo-wide config/clients/*.yaml invariants that must hard-fail the apply.
+# These aren't tied to any single client resource, so they're expressed as
+# preconditions on a no-op terraform_data resource rather than "check"
+# blocks — a failed "check" assertion only produces a warning and lets the
+# apply proceed (see the "l1_debug_clients_ignored" check below, where a
+# warning is what we actually want); a failed resource precondition halts
+# the plan/apply with an error, which is what these two need.
+resource "terraform_data" "client_config_guard" {
+  lifecycle {
+    # Two files declaring the same client_id would otherwise silently
+    # shadow one another (clients_by_id above keeps only the first file
+    # seen per client_id).
+    precondition {
+      condition     = length(local._duplicate_client_ids) == 0
+      error_message = "config/clients/ contains duplicate client_id value(s) across multiple files: ${join(", ", local._duplicate_client_ids)}. Each client_id must be unique across config/clients/*.yaml."
+    }
+
+    # A typo'd auth_level would otherwise silently match neither clients_l2
+    # nor clients_l1_all above, and the file would be ignored with no error
+    # and no warning.
+    precondition {
+      condition     = alltrue([for k, c in local.clients_by_id : contains(["L1", "L2"], c.auth_level)])
+      error_message = "config/clients/ contains file(s) with an auth_level other than \"L1\" or \"L2\": ${join(", ", [for k, c in local.clients_by_id : "${k}=\"${c.auth_level}\"" if !contains(["L1", "L2"], c.auth_level)])}."
+    }
+  }
+}
+
+# Warns (does not fail apply) when config/clients/ has L1 file(s) but
 # allow_l1_debug_clients is false — those files are being ignored, not
 # provisioned. Set allow_l1_debug_clients=true to enable them (see ADR 0004).
 check "l1_debug_clients_ignored" {
   assert {
     condition     = var.allow_l1_debug_clients || length(local.clients_l1_all) == 0
-    error_message = "config/clients-l1/ contains ${length(local.clients_l1_all)} file(s) (${join(", ", keys(local.clients_l1_all))}) but allow_l1_debug_clients=false — these L1 debug clients are being ignored, not provisioned. Set allow_l1_debug_clients=true to enable them (see ADR 0004, docs/adr/0004-reinstate-l1-debug-client.md)."
+    error_message = "config/clients/ contains ${length(local.clients_l1_all)} L1 file(s) (${join(", ", keys(local.clients_l1_all))}) but allow_l1_debug_clients=false — these L1 debug clients are being ignored, not provisioned. Set allow_l1_debug_clients=true to enable them (see ADR 0004, docs/adr/0004-reinstate-l1-debug-client.md)."
   }
 }
 
@@ -81,13 +115,6 @@ resource "keycloak_openid_client" "m2m" {
     "jwks.url"     = each.value.jwks_url
     # RFC 9068 §2.1 — JWT access token header "typ" must be "at+jwt".
     "access.token.header.type.rfc9068" = "true"
-  }
-
-  lifecycle {
-    precondition {
-      condition     = each.value.auth_level == "L2"
-      error_message = "config/clients-l2/ file for client_id \"${each.key}\" has auth_level=\"${each.value.auth_level}\", expected \"L2\"."
-    }
   }
 }
 
@@ -188,15 +215,16 @@ resource "keycloak_openid_audience_protocol_mapper" "ecosystem_audience" {
 }
 
 # ---------------------------------------------------------------------------
-# L1 debug clients — one per keycloak/config/clients-l1/*.yaml (ADR 0004).
-# Independent of the L2 client for the same hospital. Client secret is
-# Keycloak-generated (not set here); see outputs.tf for how it's surfaced.
-# Secret handling for these is deliberately relaxed (see ADR 0004) since L1
-# is a debug-only path, not the production integration path.
+# L1 debug clients — one per keycloak/config/clients/*.yaml file with
+# auth_level: "L1" (ADR 0004). Independent of the L2 client for the same
+# hospital. Client secret is Keycloak-generated (not set here); see
+# outputs.tf for how it's surfaced. Secret handling for these is
+# deliberately relaxed (see ADR 0004) since L1 is a debug-only path, not the
+# production integration path.
 #
 # local.clients_l1 above is already gated on var.allow_l1_debug_clients
 # (empty unless true), so these resources simply have zero instances — and
-# thus create nothing — when the flag is off. A clients-l1/*.yaml file
+# thus create nothing — when the flag is off. An auth_level: "L1" file
 # present without the opt-in is ignored, not applied and not a hard failure;
 # see the "l1_debug_clients_ignored" check block above for the warning.
 # ---------------------------------------------------------------------------
@@ -219,13 +247,6 @@ resource "keycloak_openid_client" "m2m_l1" {
   extra_config = {
     # RFC 9068 §2.1 — JWT access token header "typ" must be "at+jwt".
     "access.token.header.type.rfc9068" = "true"
-  }
-
-  lifecycle {
-    precondition {
-      condition     = each.value.auth_level == "L1"
-      error_message = "config/clients-l1/ file for client_id \"${each.key}\" has auth_level=\"${each.value.auth_level}\", expected \"L1\"."
-    }
   }
 }
 

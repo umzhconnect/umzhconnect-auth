@@ -24,8 +24,8 @@ authenticates with the hospital's shared client identity via `private_key_jwt`
 (RFC 7523) and receives an access token.
 
 **Actor:** hospital application
-**Precondition:** hospital is onboarded (a `config/clients-l2/*.yaml` file
-exists and Terraform has been applied); the app holds the private key matching
+**Precondition:** hospital is onboarded (a `config/clients/*.yaml` file with
+`auth_level: "L2"` exists and Terraform has been applied); the app holds the private key matching
 the JWKS published at the registered `jwks_url`.
 **Request:**
 ```http
@@ -159,8 +159,8 @@ connectivity issues (firewalls, proxies, JWKS reachability) that are harder
 to diagnose through L2's signed-assertion flow.
 
 **Actor:** hospital application (debug/test tooling)
-**Precondition:** a `config/clients-l1/*.yaml` file exists for the hospital
-and Terraform has been applied; the hospital holds the Keycloak-generated
+**Precondition:** a `config/clients/*.yaml` file with `auth_level: "L1"` exists
+for the hospital and Terraform has been applied; the hospital holds the Keycloak-generated
 `client_secret` for its L1 `client_id` (convention: `{hospital_name}-l1`).
 **Request:**
 ```http

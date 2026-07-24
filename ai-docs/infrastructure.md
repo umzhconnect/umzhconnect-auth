@@ -1,6 +1,6 @@
 ---
 recap: "docker-compose stack — services, the KC_HOSTNAME_BACKCHANNEL_DYNAMIC split between internal and published URLs, and the jwks-server role. Also covers the dev k8s deployment: manifests live in the separate tch-umzh-connect-gitops repo, this repo only builds the images (keycloak, token-validator, tf-config, jwks-server) they reference."
-keywords: [KC_HOSTNAME_BACKCHANNEL_DYNAMIC, keycloak:8080, localhost:8180, backchannel URL, published issuer, jwks-server, nginx, token-validator, keycloak-config, start-dev, production hardening, TF_VAR_keycloak_url, apisix, compose network, tch-umzh-connect-gitops, kgateway, Gateway, HTTPRoute, postgres-operator, postgresql.acid.zalan.do, umzh-connect namespace, auth.umzh.dev.example.com, tf-workspace, tf-config, ci-keycloak.yml, ci-token-validator.yml, ci-tf-config.yml, ci-jwks-server.yml, argocd-image-updater, allow_l1_debug_clients, TF_VAR_allow_l1_debug_clients, clients-l1, ADR 0004]
+keywords: [KC_HOSTNAME_BACKCHANNEL_DYNAMIC, keycloak:8080, localhost:8180, backchannel URL, published issuer, jwks-server, nginx, token-validator, keycloak-config, start-dev, production hardening, TF_VAR_keycloak_url, apisix, compose network, tch-umzh-connect-gitops, kgateway, Gateway, HTTPRoute, postgres-operator, postgresql.acid.zalan.do, umzh-connect namespace, auth.umzh.dev.example.com, tf-workspace, tf-config, ci-keycloak.yml, ci-token-validator.yml, ci-tf-config.yml, ci-jwks-server.yml, argocd-image-updater, allow_l1_debug_clients, TF_VAR_allow_l1_debug_clients, config/clients, ADR 0004]
 ---
 
 # Infrastructure
@@ -40,7 +40,7 @@ terraform apply
 
 ## Enabling L1 debug clients locally
 
-`allow_l1_debug_clients` (`keycloak/terraform/variables.tf`, default `false`) gates whether `config/clients-l1/*.yaml` files are actually provisioned — see [terraform.md](terraform.md) and [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md). By default `docker compose up keycloak-config` **ignores** any file under `config/clients-l1/` (e.g. the `hospital_a-l1.yaml` example) and only logs a warning; it does not create the L1 client.
+`allow_l1_debug_clients` (`keycloak/terraform/variables.tf`, default `false`) gates whether `config/clients/*.yaml` files with `auth_level: "L1"` are actually provisioned — see [terraform.md](terraform.md) and [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md). By default `docker compose up keycloak-config` **ignores** any `config/clients/` file with `auth_level: "L1"` (e.g. the `hospital_a-l1.yaml` example) and only logs a warning; it does not create the L1 client.
 
 `docker-compose.yml`'s `keycloak-config` service now forwards this through explicitly:
 

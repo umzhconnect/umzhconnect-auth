@@ -20,7 +20,7 @@ body:form-urlencoded {
 docs {
   L1 (`client_secret`) is an explicit, per-hospital **opt-in debug client** (ADR 0004, docs/adr/0004-reinstate-l1-debug-client.md) — not the production path. It exists so a hospital can confirm basic connectivity and routing (firewalls, proxies) before or instead of standing up the full L2 `private_key_jwt` flow, which is harder to isolate through those same failure modes.
 
-  This request only works if `keycloak/config/clients-l1/hospital_a-l1.yaml` is present (it is not, by default — see the README in that directory) and `terraform apply` has since run with `allow_l1_debug_clients=true` (default `false` — see below). Unlike L2, the client secret is Keycloak-generated, not a demo key checked into this repo — fetch it with:
+  This request only works if `keycloak/config/clients/hospital_a-l1.yaml` is present (it is not, by default — see the README in that directory) and `terraform apply` has since run with `allow_l1_debug_clients=true` (default `false` — see below). Unlike L2, the client secret is Keycloak-generated, not a demo key checked into this repo — fetch it with:
 
     terraform output -json m2m_l1_client_secrets | jq -r '.["hospital_a-l1"]'
 
@@ -28,7 +28,7 @@ docs {
 
   Resulting tokens carry `extensions.umzhconnect.auth_level = "L1"` (vs. `"L2"` for the standard client) so resource servers can distinguish and, if desired, reject L1 tokens for real clinical data flows.
 
-  `terraform apply` creates this client (and any other L1 client) only when `allow_l1_debug_clients=true` (`variables.tf`, default `false`), in every environment including local `docker-compose`. When it's `false`, `config/clients-l1/hospital_a-l1.yaml` is silently ignored — apply still succeeds, but only logs a warning, and this request will 400/401 since the client was never created. Run `TF_VAR_allow_l1_debug_clients=true docker compose up keycloak-config` (or `docker compose run --rm -e TF_VAR_allow_l1_debug_clients=true keycloak-config` for a guaranteed one-off apply) before this request will work locally — see [ai-docs/infrastructure.md](../../ai-docs/infrastructure.md) ("Enabling L1 debug clients locally") for the "Compose ignores unreferenced host env vars" and "container already up to date" gotchas.
+  `terraform apply` creates this client (and any other L1 client) only when `allow_l1_debug_clients=true` (`variables.tf`, default `false`), in every environment including local `docker-compose`. When it's `false`, `config/clients/hospital_a-l1.yaml` is silently ignored — apply still succeeds, but only logs a warning, and this request will 400/401 since the client was never created. Run `TF_VAR_allow_l1_debug_clients=true docker compose up keycloak-config` (or `docker compose run --rm -e TF_VAR_allow_l1_debug_clients=true keycloak-config` for a guaranteed one-off apply) before this request will work locally — see [ai-docs/infrastructure.md](../../ai-docs/infrastructure.md) ("Enabling L1 debug clients locally") for the "Compose ignores unreferenced host env vars" and "container already up to date" gotchas.
 }
 
 assert {
