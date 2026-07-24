@@ -16,33 +16,39 @@ and secrets-store before using this anywhere real.
 Only the Keycloak server, its direct runtime dependencies, and the
 configurator job — the smallest set needed to get a working realm:
 
-| File | Purpose |
+| Path | Purpose |
 |---|---|
-| `namespace.yaml` | Target namespace |
-| `regcred.yaml` | `ExternalSecret` → image-pull secret for private registry images |
-| `keycloak-admin-secret.yaml` | `ExternalSecret` → Keycloak bootstrap admin credentials |
-| `database.yaml` | Postgres (Zalando `postgresql.acid.zalan.do` CR) that Keycloak's `KC_DB_*` env vars point at |
-| `keycloak.yaml` | Keycloak `Deployment` + `Service` |
-| `keycloak-config-job.yaml` | PostSync `Job` (+ PVC) that runs `terraform apply` against the running Keycloak to provision the realm |
-| `keycloak_config/scopes.yaml` | Example client-scope config, read by Terraform |
-| `keycloak_config/clients/example_client-l2.yaml` | Example per-client onboarding file, read by Terraform — mirrors `keycloak/config/clients/*.yaml` in the main repo |
-| `kustomization.yaml` | Wires the above together, including the two `configMapGenerator`s the configurator job mounts |
+| `argocd/namespace.yaml` | Target namespace |
+| `argocd/regcred.yaml` | `ExternalSecret` → image-pull secret for private registry images |
+| `argocd/keycloak-admin-secret.yaml` | `ExternalSecret` → Keycloak bootstrap admin credentials |
+| `argocd/database.yaml` | Postgres (Zalando `postgresql.acid.zalan.do` CR) that Keycloak's `KC_DB_*` env vars point at |
+| `argocd/keycloak.yaml` | Keycloak `Deployment` + `Service` |
+| `argocd/keycloak-config-job.yaml` | PostSync `Job` (+ PVC) that runs `terraform apply` against the running Keycloak to provision the realm |
+| `argocd/kustomization.yaml` | Wires the above together |
+| `keycloak-config/scopes.yaml` | Example client-scope config, read by Terraform |
+| `keycloak-config/clients/example_client-l2.yaml` | Example per-client onboarding file (L2/`private_key_jwt`), read by Terraform — mirrors `keycloak/config/clients/*.yaml` in the main repo |
+| `keycloak-config/clients/example_client-l1.yaml` | Example L1 (`client_secret`) debug client, demonstrating the ADR 0004 opt-in pattern |
+| `configurator/Dockerfile` | Layers `keycloak-config/` on top of your `tf-config` image, so the Job needs no ConfigMap |
 
 Note the two config sources are deliberately different: Terraform's own
-`.tf` files are baked into the `tf-config` image (`/src`), while the
-client/scope YAML under `keycloak_config/` travels as two separate kustomize
-`configMapGenerator`s — kept out of the image so onboarding a new client
-doesn't require a rebuild. They're split in two (`example-app-scopes-config`
-for `scopes.yaml`, `example-app-clients-config` for everything under
-`clients/`) because `configMapGenerator` keys ConfigMap entries by basename
-only and can't preserve a nested directory structure — mounting them as two
-separate ConfigMap volumes in `keycloak-config-job.yaml`
-(`.../config-source/scopes.yaml` + `.../config-source/clients/`) is what
-reconstructs the `config/scopes.yaml` + `config/clients/*.yaml` split
-Terraform expects. `configMapGenerator.files` also has no glob or
-whole-directory form (verified against kustomize v5.8.1 — both a directory
-path and a `*.yaml` glob fail with "must resolve to a file"), so each client
-file must still be listed individually in `kustomization.yaml`.
+`.tf` files are baked into your `tf-config` image (`/src/terraform`, via
+your own `tf-config/Dockerfile` — see this repo's for the pattern), while
+`keycloak-config/` (client/scope YAML) is baked into a second,
+`configurator` image built from `configurator/Dockerfile`
+(`FROM <your tf-config image>`, `COPY keycloak-config/. /src/config`) that
+layers on top of it and overwrites `/src/config`. `keycloak-config-job.yaml`
+runs that `configurator` image directly — both `/src/terraform` and
+`/src/config` are already present, so there's no ConfigMap, no kustomize
+`configMapGenerator`, and no second edit anywhere to remember when
+onboarding a client. This also means deployment-specific clients (e.g. a
+throwaway test client for one environment only) don't need to touch your
+source repo's own config at all — they just live in `keycloak-config/` in
+whatever repo builds the `configurator` image.
+
+Terraform state must still survive Job re-runs (otherwise every sync would
+try to re-create an already-existing realm), so the Job copies both
+`/src/terraform` and `/src/config` onto a persistent `tf-workspace` PVC on
+every start, and only the resulting `terraform.tfstate` is kept across runs.
 
 ## What's deliberately left out
 
@@ -50,23 +56,28 @@ file must still be listed individually in `kustomization.yaml`.
   not needed to run Keycloak itself.
 - **token-validator** — a mock resource server for testing issued tokens;
   not part of the auth server.
-- **Gateway / HTTPRoute** — cluster-specific ingress (this project uses
-  kgateway); swap in whatever your cluster's ingress convention is.
+- **Gateway / HTTPRoute / traffic policies** — cluster-specific ingress
+  (this project uses kgateway); swap in whatever your cluster's ingress
+  convention is.
 
 ## Adapting this template
 
 1. Replace every `example-org`/`example-app`/`auth.example.com`/
    `example-vault` placeholder with your own values.
-2. Point `keycloak.yaml`'s image and `keycloak-config-job.yaml`'s
-   `tf-config` image at your own built images (or build your own — see
-   `tf-config/Dockerfile` in this repo for the pattern: bake your Terraform
-   `.tf` files into an image so the gitops repo doesn't need read access
-   to your source repo).
-3. Add one file per client under `keycloak_config/clients/` for each client
+2. Point `argocd/keycloak.yaml`'s image and
+   `argocd/keycloak-config-job.yaml`'s image at your own built images (or
+   build your own — see `tf-config/Dockerfile` in this repo for the
+   `tf-config` pattern, and `configurator/Dockerfile` here for how it layers
+   on top).
+3. Add one file per client under `keycloak-config/clients/` for each client
    you want to onboard, named after its own `client_id`
    (`{name}-{l1|l2}.yaml`, e.g. `hospital_a-l2.yaml`) — there is no implicit
    access, a client with no file has no KC client and cannot obtain tokens.
-   Also add its path to the `example-app-clients-config` generator's
-   `files` list in `kustomization.yaml` — kustomize can't glob or list a
-   whole directory here, so this second edit can't be avoided.
-4. Verify with `kubectl kustomize .` before committing to a gitops repo.
+   Rebuild and push the `configurator` image; no kustomize edit is needed.
+4. L1 (`client_secret`) clients are an explicit, narrow opt-in (see
+   [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md)) — an L1 file
+   alone isn't provisioned unless `TF_VAR_allow_l1_debug_clients=true` is
+   also set on the Job (see `argocd/keycloak-config-job.yaml`). Leave it
+   `false`/unset to have Terraform ignore L1 files with a warning.
+5. Verify with `kubectl kustomize argocd/` before committing to a gitops
+   repo.

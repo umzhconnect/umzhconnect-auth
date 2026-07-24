@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - regcred.yaml
+  - keycloak-admin-secret.yaml
+  - database.yaml
+  - keycloak.yaml
+  - keycloak-config-job.yaml
+# No configMapGenerator: client/scope config is baked into the
+# "configurator" image (../configurator/Dockerfile layers keycloak-config/
+# on top of your tf-config image) instead of being generated from this
+# kustomize tree. See ../README.md for why - it replaced an earlier
+# ConfigMap-based approach that needed a second edit here every time a
+# client file was added.
+#
+# argocd-image-updater (write-back-target: kustomization) rewrites the tags
+# below in-place once new images land in your registry - base manifests
+# intentionally reference bare image names with no tag/digest here. Note
+# tf-config itself isn't listed: it's an intermediate base image consumed
+# only by configurator/Dockerfile's FROM, never deployed directly.
+images:
+  - name: ghcr.io/example-org/example-app-keycloak
+  - name: ghcr.io/example-org/example-app-configurator

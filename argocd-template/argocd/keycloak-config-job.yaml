@@ -1,20 +1,15 @@
 # One-shot Terraform apply against the running Keycloak. Runs as an ArgoCD
 # PostSync hook so it re-applies after every sync, once Keycloak is reachable.
 #
-# Terraform files are baked into a "tf-config" image at /src (built from your
-# own Dockerfile: FROM hashicorp/terraform:<pin>, COPY <your realm terraform>
-# /src/terraform). Client/scope config, by contrast, is injected via two
-# kustomize configMapGenerators (see kustomization.yaml) - kept out of the
-# image so client onboarding doesn't require a rebuild. They're mounted as
-# two separate ConfigMap volumes (config-scopes at .../config-source/scopes.yaml,
-# config-clients at .../config-source/clients) rather than one, since a
-# configMapGenerator flattens every source into ConfigMap keys with no
-# subdirectories - two mounts is what reconstructs the config/scopes.yaml +
-# config/clients/*.yaml split Terraform expects. Terraform state must still
-# survive Job re-runs (otherwise every sync would try to re-create an
-# already-existing realm), so all sources are copied onto a persistent
-# workspace volume on every start, and only the tfstate there is kept across
-# runs.
+# Image is this template's own "configurator" image (../configurator/Dockerfile),
+# which layers keycloak-config/ on top of your tf-config image (Terraform
+# module baked in at /src/terraform by your own tf-config Dockerfile). Both
+# /src/terraform and /src/config are already in the image, so no ConfigMap
+# is needed - onboarding a client is "add a file under keycloak-config/clients/,
+# rebuild the configurator image", not a kustomize edit. Terraform state must
+# still survive Job re-runs (otherwise every sync would try to re-create an
+# already-existing realm), so files are copied onto a persistent workspace
+# volume on every start, and only the tfstate there is kept across runs.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -41,7 +36,12 @@ metadata:
     # it, a failed Job (e.g. transient Keycloak unavailability during a sync) would
     # persist, and the next sync's identical-spec Job creation would be a no-op against
     # the existing failed Job - terraform would never re-run.
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    #
+    # HookSucceeded is deliberately omitted: it would delete the Job (and its pod
+    # logs) the instant it succeeds, leaving nothing to inspect. Leaving it out
+    # means the most recently finished Job (success or failure) sticks around
+    # until the next sync's BeforeHookCreation clears it out.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 2
   template:
@@ -54,7 +54,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: terraform-apply
-          image: ghcr.io/example-org/example-app-tf-config
+          image: ghcr.io/example-org/example-app-configurator
           workingDir: /workspace/terraform
           securityContext:
             allowPrivilegeEscalation: false
@@ -65,10 +65,9 @@ spec:
             - sh
             - -c
             - |
-              mkdir -p /workspace/terraform /workspace/config/clients
+              mkdir -p /workspace/terraform /workspace/config
               cp -rf /src/terraform/. /workspace/terraform/
-              cp -Lf /config-source/scopes.yaml /workspace/config/scopes.yaml
-              cp -rfL /config-source/clients/. /workspace/config/clients/
+              cp -rf /src/config/. /workspace/config/
               terraform init -input=false
               terraform apply -auto-approve -input=false
           env:
@@ -84,25 +83,19 @@ spec:
                 secretKeyRef:
                   name: keycloak-admin
                   key: admin-password
+            # Explicit opt-in to provision keycloak-config/clients/*-l1.yaml
+            # (see ADR 0004 in the main repo) - omit or set to "false" to have
+            # Terraform ignore L1 files with a warning instead.
+            - name: TF_VAR_allow_l1_debug_clients
+              value: "true"
           volumeMounts:
             - name: workspace
               mountPath: /workspace
             - name: tmp
               mountPath: /tmp
-            - name: example-app-scopes-config
-              mountPath: /config-source/scopes.yaml
-              subPath: scopes.yaml
-            - name: example-app-clients-config
-              mountPath: /config-source/clients
       volumes:
         - name: workspace
           persistentVolumeClaim:
             claimName: tf-workspace
         - name: tmp
           emptyDir: {}
-        - name: example-app-scopes-config
-          configMap:
-            name: example-app-scopes-config
-        - name: example-app-clients-config
-          configMap:
-            name: example-app-clients-config
