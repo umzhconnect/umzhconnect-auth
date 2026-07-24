@@ -7,19 +7,20 @@ configuration changes, lifecycle management, and incident response.
 Everything in this document follows two invariants:
 
 1. **All Keycloak state is Terraform-managed from VCS.** Every KC client is
-   generated from a `hospitals/*.yaml` config file; every realm scope from a
+   generated from a `config/clients/*.yaml` file (its own `auth_level` field
+   determines whether it's L1 or L2); every realm scope from a
    `scopes.yaml` config file (see "Where hospital/scope config actually
    lives" below for where those files live in your environment). Never
    hand-edit the KC admin console — any change made there is silently
    reverted on the next `terraform apply` and is lost in disaster recovery
    ([UC-L5](#uc-l5--disaster-recovery)).
 2. **One primary (L2) KC client per hospital, provisioned explicitly.** A
-   hospital with no `hospitals/{org_id}.yaml` config file has no KC client
-   and cannot obtain tokens ([ADR 0002](../adr/0002-one-client-per-hospital.md)).
+   hospital with no `config/clients/*.yaml` file with `auth_level: "L2"` has
+   no KC client and cannot obtain tokens ([ADR 0002](../adr/0002-one-client-per-hospital.md)).
    The primary, production integration path is always `private_key_jwt` (L2).
    `client_secret` (L1) is **not** a production path — it exists only as an
    explicit, per-hospital, opt-in **debug client**
-   (`config/hospitals-l1/{org_id}.yaml`, [ADR
+   (a `config/clients/*.yaml` file with `auth_level: "L1"`, [ADR
    0004](../adr/0004-reinstate-l1-debug-client.md)) for connectivity
    troubleshooting, alongside — never instead of — the L2 client. Every
    token carries a required `extensions.umzhconnect.auth_level` claim
@@ -50,7 +51,7 @@ hospital never requires rebuilding or republishing anything from this repo.
 See [`argocd-template/README.md`](../../argocd-template/README.md) for the
 exact file layout.
 
-So throughout this document, "edit `keycloak/config/hospitals/{org_id}.yaml`"
+So throughout this document, "edit `keycloak/config/clients/*.yaml`"
 means: edit that file in whichever location is authoritative for your
 environment — this repo's copy for the local docker-compose demo, or the
 equivalent file in your deployment repo's `keycloak_config/` directory
@@ -71,7 +72,7 @@ deferral and its revisit condition.
 | "We want a separate client per application" | One client per hospital; all apps of a hospital share one identity. Revisit when the Policy Server arrives | [ADR 0002](../adr/0002-one-client-per-hospital.md) |
 | "Tokens for our FHIR server should only work for us" (per-target `aud`) | `aud` is a constant ecosystem value; target-specific audience binding is deferred until Keycloak supports RFC 8707 non-experimentally | [ADR 0003](../adr/0003-constant-ecosystem-audience.md) |
 | "Only hospitals X and Y should get tokens for our server" (inbound allow-list) | There is no per-hospital allow-list of any kind; FHIR servers are responsible for their own authorization | [ADR 0003](../adr/0003-constant-ecosystem-audience.md) |
-| "Grant scope S only to hospital X" | Scopes are realm-wide: `default_scopes` are assigned to every M2M client, `optional_scopes` are requestable by every client. Per-(caller, target) scope enforcement is a Policy Server concern | [ADR 0002](../adr/0002-one-client-per-hospital.md) |
+| "Grant scope S only to hospital X" | Scopes are realm-wide: every scope in `config/scopes.yaml` is requestable by every M2M client (none is assigned by default). Per-(caller, target) scope enforcement is a Policy Server concern | [ADR 0002](../adr/0002-one-client-per-hospital.md) |
 | "We want mTLS / DPoP (L3)" | L3 is out of scope until specified by the IG; the `auth_level` claim is deferred with it | [ADR 0001](../adr/0001-defer-auth-level-claim.md) |
 
 ---
@@ -144,26 +145,30 @@ obtain tokens accepted anywhere in the ecosystem.
 
 | Field | What to ask for |
 |-------|-----------------|
-| `org_id` | Stable short identifier — becomes the KC `client_id` and the filename. Choose carefully: renaming later is an offboard + re-onboard ([UC-O3](#uc-o3--changing-a-hospitals-metadata-or-jwks-url)) |
-| `org_display_name` | Human-readable name (shown in KC admin) |
-| `org_reference` | Canonical FHIR `Organization` reference URL — embedded by the AS in every token as `extensions.umzhconnect.organization_reference`; resource servers use it for consent lookup |
+| `client_id` | Stable identifier — the KC `client_id` directly, read from the file's own field, not the filename. Convention: `{hospital_name}-l2` (e.g. `hospital_a-l2`). Choose carefully: renaming later is an offboard + re-onboard ([UC-O3](#uc-o3--changing-a-hospitals-metadata-or-jwks-url)) |
+| `client_name` | Human-readable name (shown in KC admin) |
+| `organization_reference` | Canonical FHIR `Organization` reference URL — embedded by the AS in every token as `extensions.umzhconnect.organization_reference`; resource servers use it for consent lookup |
 | `fhir_url` | Base URL of the hospital's own FHIR server (recorded for reference; not written into `aud` — see [ADR 0003](../adr/0003-constant-ecosystem-audience.md)) |
 | `jwks_url` | Public HTTPS endpoint where the hospital publishes the JWKS for its L2 signing key. Must be reachable from Keycloak |
+| `auth_level` | Must be `"L2"` — this field (not the directory or filename) is what routes the file into the L2 client map; a `check "known_auth_level"` block hard-fails `apply` if any `config/clients/*.yaml` file has a value other than `"L1"`/`"L2"` |
 
 **Steps:**
-1. Create a `{org_id}.yaml` file with the five fields above (filename stem
-   must equal `org_id`) in your environment's hospital config location — the
-   local docker-compose demo's `keycloak/config/hospitals/`, or your
-   deployment repo's equivalent directory modeled on
-   [`./argocd-template`](../../argocd-template) (see "Where hospital/scope
-   config actually lives" above).
+1. Create a YAML file with the six fields above — recommended filename
+   `{client_id}.yaml` (e.g. `hospital_a-l2.yaml`), though Terraform only
+   reads the `client_id` field, never the filename — in your environment's
+   hospital config location: the local docker-compose demo's
+   `keycloak/config/clients/`, or your deployment repo's equivalent
+   directory modeled on [`./argocd-template`](../../argocd-template) (see
+   "Where hospital/scope config actually lives" above).
 2. PR review and merge, in whichever repo that file lives.
 3. `terraform apply` (see [UC-O4](#uc-o4--rolling-out-a-config-change-per-environment)
-   for how this happens per environment). Terraform creates KC client
-   `{org_id}` with service account, `private_key_jwt` auth against the
-   registered `jwks_url`, all `default_scopes`, and the four protocol mappers
-   (`client_id`, org reference, FHIR context, ecosystem audience).
-4. Verify: the hospital acquires a token with `client_id={org_id}` and a
+   for how this happens per environment). Terraform creates the KC client
+   named by `client_id` with service account, `private_key_jwt` auth against
+   the registered `jwks_url`, every scope from `config/scopes.yaml` registered
+   as optional (none assigned by default — see [UC-O2](#uc-o2--adding-or-removing-a-realm-scope)),
+   and the four protocol mappers (`client_id`, org reference, FHIR context,
+   ecosystem audience).
+4. Verify: the hospital acquires a token with its `client_id` and a
    signed client assertion; check the token carries the expected
    `organization_reference` and scopes (see
    [technical.md UC-T1](technical.md#uc-t1--hospital-acquires-a-token-l2)).
@@ -269,47 +274,47 @@ is retired.
 1. Edit `scopes.yaml` in your environment's config location (the local
    docker-compose demo's `keycloak/config/scopes.yaml`, or your deployment
    repo's equivalent modeled on [`./argocd-template`](../../argocd-template) —
-   see "Where hospital/scope config actually lives" above):
-   - `default_scopes` — assigned to every hospital client, always present in
-     issued tokens.
-   - `optional_scopes` — registered in the realm; any client may request them
-     explicitly via the `scope` parameter, but they are not included by
-     default.
+   see "Where hospital/scope config actually lives" above): add or remove an
+   entry under `scopes`. Every scope is registered on every hospital client
+   as an optional scope — requestable explicitly via the `scope` parameter,
+   never included unless requested.
 2. PR review and merge, in whichever repo that file lives.
-3. `terraform apply` — new scopes are created and assigned; removed entries
+3. `terraform apply` — new scopes are created and registered; removed entries
    are destroyed together with their client assignments.
 
 **Postcondition:** subsequently issued tokens reflect the change. Tokens
 issued before the apply keep the old scope set until expiry (max 300 s).
 
-**Caution:** scope changes are realm-wide — a new `default_scope` lands in
-*every* hospital's tokens. There is no per-hospital scope assignment
-(see "Requests you must decline" above).
+**Caution:** scope changes are realm-wide — a new scope becomes requestable
+by *every* hospital, and any hospital's existing integration that already
+requests a now-removed scope will get `invalid_scope` on its next token
+request. There is no per-hospital scope assignment (see "Requests you must
+decline" above).
 
 ---
 
 ### UC-O3 — Changing a hospital's metadata or JWKS URL
 
 A hospital changes a property of its registration — most commonly the
-`jwks_url` (key endpoint moved), or `org_reference` / display name.
+`jwks_url` (key endpoint moved), or `organization_reference` / display name.
 
 **Actor:** platform operator, on request of the hospital
 **Trigger:** infrastructure change, org metadata update
 
 **Steps:**
-1. Edit `{org_id}.yaml` in your environment's hospital config location (see
-   "Where hospital/scope config actually lives" above).
+1. Edit the hospital's L2 file in `config/clients/` in your environment's
+   hospital config location (see "Where hospital/scope config actually lives" above).
 2. PR review and merge, in whichever repo that file lives.
 3. `terraform apply` — the KC client is updated in place.
 
 **Postcondition:** Keycloak uses the new metadata immediately. If `jwks_url`
 changed, Keycloak fetches the JWKS from the new URL on the next token request.
 
-**Note:** changing `org_id` is a rename, not an in-place update — the KC
-`client_id` encodes it. Treat it as offboarding the old identity
-([UC-L2](#uc-l2--offboarding-a-hospital)) plus onboarding a new one
-([UC-O1](#uc-o1--onboarding-a-new-hospital)), coordinated with the hospital so
-its systems switch `client_id` at the cutover.
+**Note:** changing `client_id` is a rename, not an in-place update. Treat it
+as offboarding the old identity ([UC-L2](#uc-l2--offboarding-a-hospital))
+plus onboarding a new one ([UC-O1](#uc-o1--onboarding-a-new-hospital)),
+coordinated with the hospital so its systems switch `client_id` at the
+cutover.
 
 ---
 
@@ -355,20 +360,20 @@ to isolate
    to avoid implementing `private_key_jwt`. If the hospital wants a
    long-term `client_secret` integration, decline per the "Requests you must
    decline" table above.
-2. Create a `hospitals-l1/{org_id}.yaml` file (in the local docker-compose
-   demo's `keycloak/config/hospitals-l1/`, or your deployment repo's
-   equivalent — see "Where hospital/scope config actually lives" above) with
-   `org_display_name`, `org_reference`, and (recommended for traceability)
-   `reason` / `requested_by` / `requested_date` — see [the directory's
-   README](../../keycloak/config/hospitals-l1/README.md) for the field
-   schema. Independent of the L2 file for the same `org_id`: the hospital
-   may have an L1 file, an L2 file, both, or neither, in any order.
+2. Create a file in `config/clients/` (in the local docker-compose demo's
+   `keycloak/config/clients/`, or your deployment repo's equivalent — see
+   "Where hospital/scope config actually lives" above) with `client_id`
+   (convention: `{hospital_name}-l1`), `client_name`, `organization_reference`,
+   `fhir_url`, and `auth_level: "L1"` — see [the directory's
+   README](../../keycloak/config/clients/README.md) for the field
+   schema. Independent of the L2 file for the same hospital: it may have an
+   L1 file, an L2 file, both, or neither, in any order.
 3. PR review and merge, in whichever repo that file lives.
-4. `terraform apply` — creates KC client `{org_id}--l1` with a
+4. `terraform apply` — creates the KC client named by `client_id` with a
    Keycloak-generated `client_secret`, `client_credentials` grant, the same
    default/optional scopes and mapper set as the L2 client (org reference,
    FHIR context, ecosystem audience), plus `extensions.umzhconnect.auth_level`
-   hardcoded to `"L1"`.
+   sourced from the file's `auth_level` field (`"L1"`).
 5. Hand the generated `client_secret` to the hospital (see [ADR
    0004](../adr/0004-reinstate-l1-debug-client.md) for the relaxed-but-scoped
    secret-handling exception this client gets — it's still not to be reused
@@ -379,9 +384,9 @@ to isolate
 
 **Postcondition:** hospital can obtain L1 debug tokens alongside (or instead
 of, if it hasn't onboarded L2 yet) its L2 client. Revoking L1 access mirrors
-offboarding: delete `config/hospitals-l1/{org_id}.yaml` and `terraform
-apply` — this is independent of, and does not affect, the hospital's L2
-client.
+offboarding: delete the hospital's `config/clients/*.yaml` file with
+`auth_level: "L1"` and `terraform apply` — this is independent of, and does not affect, the
+hospital's L2 client.
 
 ---
 
@@ -422,9 +427,10 @@ A hospital leaves the network or is decommissioned.
 **Trigger:** contract end, decommissioning
 
 **Steps:**
-1. Delete the `{org_id}.yaml` file from your environment's hospital config
-   location (see "Where hospital/scope config actually lives" above). There
-   is no allow-list or grants file to clean up elsewhere.
+1. Delete the hospital's L2 file from `config/clients/` in your environment's
+   hospital config location (see "Where hospital/scope config actually
+   lives" above). There is no allow-list or grants file to clean up
+   elsewhere.
 2. PR review and merge, in whichever repo that file lives.
 3. `terraform apply` — the KC client and its mappers are destroyed.
 

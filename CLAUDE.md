@@ -46,7 +46,7 @@ Architecture decisions: [`docs/adr/`](docs/adr/). Operator runbook / use cases: 
 
 `private_key_jwt` (L2) is the default and the only client provisioned automatically. `client_secret` (L1) is banned as a default, primary, or fallback production client — never propose it as the general path.
 
-The one exception: [ADR 0004](docs/adr/0004-reinstate-l1-debug-client.md) reinstates L1 as an explicit, per-hospital **opt-in debug client** (`{org_id}--l1`, provisioned only via a deliberate `config/hospitals-l1/{org_id}.yaml` file), requested by hospitals for firewall/connectivity debugging that's harder to isolate through L2's signed-assertion flow. This is narrow and tracked, not a general reopening of L1 — don't propose L1 for anything beyond this debug path without checking ADR 0004 first.
+The one exception: [ADR 0004](docs/adr/0004-reinstate-l1-debug-client.md) reinstates L1 as an explicit, per-hospital **opt-in debug client** (conventionally `{hospital}-l1` client_id, provisioned only via a deliberate `config/clients/*.yaml` file with `auth_level: "L1"`), requested by hospitals for firewall/connectivity debugging that's harder to isolate through L2's signed-assertion flow. This is narrow and tracked, not a general reopening of L1 — don't propose L1 for anything beyond this debug path without checking ADR 0004 first.
 
 ### Terraform `extra_config` — no `attributes.` prefix
 
@@ -54,11 +54,11 @@ The one exception: [ADR 0004](docs/adr/0004-reinstate-l1-debug-client.md) reinst
 
 ### Never touch KC clients manually — everything is Terraform-managed
 
-All KC clients are generated from `config/hospitals/*.yaml` files. Never hand-edit the KC admin console. If a client needs to change, change the YAML and run `terraform apply`.
+All KC clients are generated from `config/clients/*.yaml` files — each file's own `auth_level` field ("L1" or "L2") determines its level, not its directory. Never hand-edit the KC admin console. If a client needs to change, change the YAML and run `terraform apply`.
 
 ### No implicit access — hospitals must be explicitly onboarded
 
-A hospital with no `config/hospitals/{org_id}.yaml` file has no KC client and cannot obtain tokens. Adding a hospital is a deliberate provisioning step. See [ADR 0002](docs/adr/0002-one-client-per-hospital.md).
+A hospital with no `config/clients/*.yaml` file (with `auth_level: "L2"`) has no KC client and cannot obtain tokens. Adding a hospital is a deliberate provisioning step. See [ADR 0002](docs/adr/0002-one-client-per-hospital.md).
 
 ### Realm changes must stay sandbox-compatible
 

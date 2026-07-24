@@ -1,6 +1,0 @@
-org_display_name: "Hospital A"
-org_reference: "https://fhir.hospital-a.example/fhir/Organization/HospitalA"
-fhir_url: "https://fhir.hospital-a.example/fhir"
-reason: "Firewall/JWKS connectivity debugging"
-requested_by: "Hospital A IT"
-requested_date: "2026-07-16"

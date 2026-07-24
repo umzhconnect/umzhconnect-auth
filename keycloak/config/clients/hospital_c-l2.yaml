@@ -1,0 +1,6 @@
+client_id: "hospital_c-l2"
+client_name: "Hospital C"
+organization_reference: "https://fhir.hospital-c.example/fhir/Organization/HospitalC"
+fhir_url: "https://fhir.hospital-c.example/fhir"
+jwks_url: "https://hospital-c.example/.well-known/jwks.json"
+auth_level: "L2"

@@ -5,7 +5,7 @@ meta {
 }
 
 get {
-  url: {{jwksServerUrl}}/.well-known/{{clientId}}.jwks.json
+  url: {{jwksServerUrl}}/.well-known/{{jwksKeyName}}.jwks.json
   body: none
   auth: none
 }
@@ -16,5 +16,5 @@ assert {
 }
 
 docs {
-  Fetches an L2 client's own hosted JWKS — the public key set Keycloak fetches from `jwks.url` to verify that client's `private_key_jwt` assertions (see [ai-docs/infrastructure.md](../../ai-docs/infrastructure.md)). Hosted at `/.well-known/{client_id}.jwks.json` by convention. Defaults to the placer (`clientId: hospital-a`) via the `clientId` environment variable — set it to `hospital-b` (or override inline) to fetch the fulfiller's instead, since there's no per-role distinction on this request. This stands in for the sandbox's APISIX-published `/jwks.json`, not the AS's own signing keys (that's `02-jwks.bru`).
+  Fetches an L2 client's own hosted JWKS — the public key set Keycloak fetches from `jwks.url` to verify that client's `private_key_jwt` assertions (see [ai-docs/infrastructure.md](../../ai-docs/infrastructure.md)). Hosted at `/.well-known/{hospital-name}.jwks.json` by convention — this filename is independent of KC `client_id` (which is `hospital_a-l2`, not `hospital-a`), so it's driven by its own `jwksKeyName` environment variable, not `clientId`. Defaults to the placer (`jwksKeyName: hospital-a`) — set it to `hospital-b` (or override inline) to fetch the fulfiller's instead, since there's no per-role distinction on this request. This stands in for the sandbox's APISIX-published `/jwks.json`, not the AS's own signing keys (that's `02-jwks.bru`).
 }

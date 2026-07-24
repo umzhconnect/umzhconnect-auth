@@ -3,13 +3,18 @@
 #
 # Terraform files are baked into a "tf-config" image at /src (built from your
 # own Dockerfile: FROM hashicorp/terraform:<pin>, COPY <your realm terraform>
-# /src/terraform). Client/scope config, by contrast, is injected via a
-# kustomize configMapGenerator (see kustomization.yaml) mounted flat at
-# /config - kept out of the image so client onboarding doesn't require a
-# rebuild. Terraform state must still survive Job re-runs (otherwise every
-# sync would try to re-create an already-existing realm), so both sources are
-# copied onto a persistent workspace volume on every start, and only the
-# tfstate there is kept across runs.
+# /src/terraform). Client/scope config, by contrast, is injected via two
+# kustomize configMapGenerators (see kustomization.yaml) - kept out of the
+# image so client onboarding doesn't require a rebuild. They're mounted as
+# two separate ConfigMap volumes (config-scopes at .../config-source/scopes.yaml,
+# config-clients at .../config-source/clients) rather than one, since a
+# configMapGenerator flattens every source into ConfigMap keys with no
+# subdirectories - two mounts is what reconstructs the config/scopes.yaml +
+# config/clients/*.yaml split Terraform expects. Terraform state must still
+# survive Job re-runs (otherwise every sync would try to re-create an
+# already-existing realm), so all sources are copied onto a persistent
+# workspace volume on every start, and only the tfstate there is kept across
+# runs.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -60,9 +65,10 @@ spec:
             - sh
             - -c
             - |
-              mkdir -p /workspace/terraform /workspace/config
+              mkdir -p /workspace/terraform /workspace/config/clients
               cp -rf /src/terraform/. /workspace/terraform/
-              cp -rfL /config/* /workspace/config/
+              cp -Lf /config-source/scopes.yaml /workspace/config/scopes.yaml
+              cp -rfL /config-source/clients/. /workspace/config/clients/
               terraform init -input=false
               terraform apply -auto-approve -input=false
           env:
@@ -83,14 +89,20 @@ spec:
               mountPath: /workspace
             - name: tmp
               mountPath: /tmp
-            - name: example-app-config
-              mountPath: /config
+            - name: example-app-scopes-config
+              mountPath: /config-source/scopes.yaml
+              subPath: scopes.yaml
+            - name: example-app-clients-config
+              mountPath: /config-source/clients
       volumes:
         - name: workspace
           persistentVolumeClaim:
             claimName: tf-workspace
         - name: tmp
           emptyDir: {}
-        - name: example-app-config
+        - name: example-app-scopes-config
           configMap:
-            name: example-app-config
+            name: example-app-scopes-config
+        - name: example-app-clients-config
+          configMap:
+            name: example-app-clients-config

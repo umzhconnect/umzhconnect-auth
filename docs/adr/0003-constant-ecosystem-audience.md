@@ -51,7 +51,7 @@ What was ruled out:
 
 - **Token isolation risk returns.** A token is not bound to a specific FHIR server URL. Any FHIR server in the realm will accept a token bearing the constant ecosystem `aud`. This is the same risk profile as the original 2026-06-23 deferral. FHIR servers remain responsible for their own access control.
 - **Looser RFC 9068 conformance.** `aud` is required and present, but does not identify the actual resource server — a deliberate, documented deviation rather than an oversight.
-- **Simpler Terraform and config.** No resource-server stub clients, no `resource=` handling, no `aud:{org_id}` scopes, no `allowed_clients` field in hospital YAML. Onboarding a hospital requires only `org_id`, `org_display_name`, `org_reference`, `fhir_url`, and `jwks_url`.
+- **Simpler Terraform and config.** No resource-server stub clients, no `resource=` handling, no `aud:{org_id}` scopes, no `allowed_clients` field in hospital YAML. Onboarding a hospital requires only `client_id`, `client_name`, `organization_reference`, `fhir_url`, `jwks_url`, and `auth_level`.
 - **No standing escape hatch.** Unlike the interim state considered during this decision, there is currently no per-hospital mechanism to request target-specific audience isolation. Building one is future work, not a flag flip.
 
 ---

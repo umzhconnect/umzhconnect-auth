@@ -1,0 +1,21 @@
+# Example M2M client onboarding file. Terraform reads one file per client
+# under config/clients/ to create a KC client + its trust anchor; whether a
+# file is L1 or L2 is read from its own auth_level field, not its filename
+# or directory (see ai-docs/config-model.md in the main repo). Add one file
+# per client to onboard - there is no implicit access, a client with no
+# file here has no KC client and cannot obtain tokens.
+#
+# Adding a file here is not enough on its own - kustomize's
+# configMapGenerator can't glob or list a whole directory, so its path must
+# also be added to the clients-config files list in kustomization.yaml.
+#
+# Naming convention: name the file after its own client_id (never read by
+# Terraform, but keeps the two in sync for humans) - underscores within the
+# hospital/client name, hyphen before the level suffix:
+# {name}-{l1|l2}.yaml, e.g. example_client-l2.yaml.
+client_id: "example_client-l2"
+client_name: "Example Client"
+organization_reference: "https://fhir.example-client.example/fhir/Organization/ExampleClient"
+fhir_url: "https://fhir.example-client.example/fhir"
+jwks_url: "https://jwks.example-client.example/.well-known/jwks.json"
+auth_level: "L2"

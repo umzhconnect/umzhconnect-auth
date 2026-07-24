@@ -27,14 +27,14 @@ That requirement was explicitly dropped in ADR 0002 and ADR 0003. FHIR servers a
 
 ## What D2 looks like in the current model
 
-No structural changes to the hospital model. Everything that is today driven from `config/hospitals/{org_id}.yaml` continues as-is.
+No structural changes to the hospital model. Everything that is today driven from `config/clients/*.yaml` (L2 files, `auth_level: "L2"`) continues as-is.
 
 ### KC objects
 
 | Object | RFC 8707 (current) | D2 |
 |--------|-------------------|-----|
-| M2M client `{org_id}` | ✅ one per hospital | ✅ same |
-| FHIR resource-server client `{org_id}-fhir-server` | ✅ one per hospital | ❌ not needed |
+| M2M client `{client_id}` | ✅ one per hospital | ✅ same |
+| FHIR resource-server client `{client_id}-fhir-server` | ✅ one per hospital | ❌ not needed |
 | Realm-level client scope `aud:hospital-b` | ❌ | ✅ one per hospital |
 | Audience mapper on scope | ❌ | ✅ `included_custom_audience = fhir_url` |
 | Audience mapper on M2M client (cross-hospital) | ✅ per `allowed_targets` pair | ❌ replaced by optional scope assignment |
@@ -76,7 +76,7 @@ Using `included_custom_audience = fhir_url` on the scope's audience mapper puts 
 
 **No experimental KC feature dependency.** `resource-indicators` is still labelled experimental in KC 26.6.1. D2 uses standard KC scope and audience mapper machinery — no feature flag, no version pin, no risk of the feature being renamed or broken on KC upgrade.
 
-**Fewer KC objects.** The `{org_id}-fhir-server` registration clients (one per hospital) are not needed. The Terraform `fhir_resource_server` resource block and the `depends_on` workaround on `cross_hospital` mappers disappear.
+**Fewer KC objects.** The `{client_id}-fhir-server` registration clients (one per hospital) are not needed. The Terraform `fhir_resource_server` resource block and the `depends_on` workaround on `cross_hospital` mappers disappear.
 
 **No KC bug workaround.** `use_refresh_tokens_client_credentials = true` is required on all M2M clients to avoid an NPE in KC when `resource-indicators` is active ([keycloak/keycloak#50251](https://github.com/keycloak/keycloak/issues/50251)). D2 doesn't trigger this.
 
