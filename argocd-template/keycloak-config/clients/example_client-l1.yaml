@@ -1,0 +1,17 @@
+# Example L1 (client_secret) debug client. L1 is banned as a default,
+# primary, or fallback production client - it's only reinstated as an
+# explicit, per-client opt-in for firewall/connectivity debugging that's
+# harder to isolate through L2's signed-assertion flow (see this repo's own
+# docs/adr/0004-reinstate-l1-debug-client.md for the full rationale).
+#
+# Provisioning an L1 file here is not enough by itself: the keycloak-config
+# Job must also set TF_VAR_allow_l1_debug_clients=true (see
+# argocd/keycloak-config-job.yaml), or Terraform ignores every L1 file with
+# a warning instead of provisioning it. That's a deliberate two-key control
+# - the file expresses per-client intent, the env var expresses
+# per-environment/deployment consent.
+client_id: "example_client-l1"
+client_name: "Example Client (L1 debug)"
+organization_reference: "https://fhir.example-client.example/fhir/Organization/ExampleClient"
+fhir_url: "https://fhir.example-client.example/fhir"
+auth_level: "L1"
