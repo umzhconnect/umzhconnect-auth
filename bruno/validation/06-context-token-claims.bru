@@ -59,7 +59,7 @@ script:post-response {
 
   test("organization_reference is the Fulfiller org URL", () => {
     const orgRef = claims.extensions?.umzhconnect?.organization_reference;
-    expect(orgRef).to.include("hospital-b");
+    expect(orgRef).to.include("hospital_b");
   });
 
   test("aud is the constant ecosystem audience", () => {

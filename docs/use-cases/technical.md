@@ -129,7 +129,7 @@ is published at the registered `jwks_url`.
 
 **Expected behavior:** Keycloak re-fetches the JWKS when it encounters the
 unknown `kid`, verifies the assertion, and issues the token — no operator
-action. See operational [UC-L1](operational.md#uc-l1--hospital-rotates-its-l2-signing-key)
+action. See operational [UC-L1](operational.md#uc-l1--hospital_rotates-its-l2-signing-key)
 for the rotation procedure and its pitfalls (reused `kid`, premature old-key
 removal).
 
@@ -173,7 +173,7 @@ grant_type=client_credentials
 &scope=system/Task.cru system/ServiceRequest.rs system/Patient.r
 ```
 
-**Expected token (JWT):** same shape as [UC-T1](#uc-t1--hospital-acquires-a-token-l2)
+**Expected token (JWT):** same shape as [UC-T1](#uc-t1--hospital_acquires-a-token-l2)
 (`organization_reference`, exactly the requested scopes, ecosystem `aud`), except:
 
 | Where | Claim | Value |

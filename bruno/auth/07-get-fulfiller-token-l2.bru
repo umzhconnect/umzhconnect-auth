@@ -19,7 +19,7 @@ body:form-urlencoded {
 }
 
 docs {
-  Same flow as auth/06 but for the Fulfiller (hospital-b) client and its own demo key — establishes that a second, independently-onboarded hospital gets a token with its own `organization_reference`, distinct from the Placer's.
+  Same flow as auth/06 but for the Fulfiller (hospital_b) client and its own demo key — establishes that a second, independently-onboarded hospital gets a token with its own `organization_reference`, distinct from the Placer's.
 
   Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }
@@ -36,14 +36,14 @@ script:pre-request {
   const path = require("path");
 
   const keysDir = bru.getEnvVar("l2KeysDir") || path.resolve(bru.cwd(), "..", "keys");
-  const pem = fs.readFileSync(path.join(keysDir, "hospital-b.key"), "utf8");
+  const pem = fs.readFileSync(path.join(keysDir, "hospital_b-l2.key"), "utf8");
 
   const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
   const now = Math.floor(Date.now() / 1000);
   const tokenEndpoint = `${bru.getEnvVar("keycloakUrl")}/realms/${bru.getEnvVar("realm")}/protocol/openid-connect/token`;
 
   const clientId = bru.getEnvVar("fulfillerClientId");
-  const header = { alg: "RS256", typ: "JWT", kid: "hospital-b" };
+  const header = { alg: "RS256", typ: "JWT", kid: "hospital_b-l2" };
   const payload = {
     iss: clientId,
     sub: clientId,

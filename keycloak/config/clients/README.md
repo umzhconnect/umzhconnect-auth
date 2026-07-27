@@ -10,9 +10,9 @@ convention only (recommended: name the file after `client_id`).
 ```yaml
 client_id: "hospital_a-l2"
 client_name: "Hospital A"
-organization_reference: "https://fhir.hospital-a.example/fhir/Organization/HospitalA"
-fhir_url: "https://fhir.hospital-a.example/fhir"
-jwks_url: "http://jwks-server/hospital-a.jwks.json"
+organization_reference: "https://fhir.hospital_a.example/fhir/Organization/HospitalA"
+fhir_url: "https://fhir.hospital_a.example/fhir"
+jwks_url: "http://jwks-server/hospital_a-l2.jwks.json"
 auth_level: "L2"
 ```
 
@@ -31,8 +31,8 @@ connectivity (firewalls, routing, JWKS reachability) and move to L2 later.
 ```yaml
 client_id: "hospital_a-l1"
 client_name: "Hospital A"
-organization_reference: "https://fhir.hospital-a.example/fhir/Organization/HospitalA"
-fhir_url: "https://fhir.hospital-a.example/fhir"
+organization_reference: "https://fhir.hospital_a.example/fhir/Organization/HospitalA"
+fhir_url: "https://fhir.hospital_a.example/fhir"
 auth_level: "L1"
 ```
 

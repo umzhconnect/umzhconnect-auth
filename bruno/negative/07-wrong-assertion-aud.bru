@@ -36,13 +36,13 @@ script:pre-request {
   const path = require("path");
 
   const keysDir = bru.getEnvVar("l2KeysDir") || path.resolve(bru.cwd(), "..", "keys");
-  const pem = fs.readFileSync(path.join(keysDir, "hospital-a.key"), "utf8");
+  const pem = fs.readFileSync(path.join(keysDir, "hospital_a-l2.key"), "utf8");
 
   const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
   const now = Math.floor(Date.now() / 1000);
 
   const clientId = bru.getEnvVar("placerClientId");
-  const header = { alg: "RS256", typ: "JWT", kid: "hospital-a" };
+  const header = { alg: "RS256", typ: "JWT", kid: "hospital_a-l2" };
   const payload = {
     iss: clientId,
     sub: clientId,

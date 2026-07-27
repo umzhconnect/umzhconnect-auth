@@ -22,7 +22,7 @@ body:form-urlencoded {
 docs {
   Canonical IG example (security.md §Context-centric authorization): the Fulfiller fetches from the Placer's FHIR server in the context of a specific ServiceRequest. The token carries fhirContext with the ServiceRequest reference; aud is the constant ecosystem audience (ADR 0003).
 
-  This mirrors auth/05 but uses the fulfiller client (hospital-b).
+  This mirrors auth/05 but uses the fulfiller client (hospital_b).
 
   Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }
@@ -38,14 +38,14 @@ script:pre-request {
   const path = require("path");
 
   const keysDir = bru.getEnvVar("l2KeysDir") || path.resolve(bru.cwd(), "..", "keys");
-  const pem = fs.readFileSync(path.join(keysDir, "hospital-b.key"), "utf8");
+  const pem = fs.readFileSync(path.join(keysDir, "hospital_b-l2.key"), "utf8");
 
   const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
   const now = Math.floor(Date.now() / 1000);
   const tokenEndpoint = `${bru.getEnvVar("keycloakUrl")}/realms/${bru.getEnvVar("realm")}/protocol/openid-connect/token`;
 
   const clientId = bru.getEnvVar("fulfillerClientId");
-  const header = { alg: "RS256", typ: "JWT", kid: "hospital-b" };
+  const header = { alg: "RS256", typ: "JWT", kid: "hospital_b-l2" };
   const payload = {
     iss: clientId,
     sub: clientId,

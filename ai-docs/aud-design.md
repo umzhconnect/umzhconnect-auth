@@ -20,7 +20,7 @@ Target-specific `aud` binding via RFC 8707 (`resource=` parameter) is deferred u
 ```
 POST /realms/umzh-connect/protocol/openid-connect/token
   grant_type=client_credentials
-  client_id=hospital-a
+  client_id=hospital_a
   client_assertion=<JWT>
   client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
   scope=system/Task.cru system/ServiceRequest.rs system/Patient.r
