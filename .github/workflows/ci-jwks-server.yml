@@ -11,7 +11,7 @@ on:
     branches: [main]
     paths:
       - "jwks-server/**"
-      - "keys/*.jwks.json"
+      - "keys/.well-known/**"
       - ".github/workflows/ci-jwks-server.yml"
       - ".github/workflows/build-image.yml"
 
