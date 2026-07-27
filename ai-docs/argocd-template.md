@@ -1,6 +1,6 @@
 ---
-recap: "argocd-template/ is a minimal sample/template of the ArgoCD/kustomize manifests that run this repo's Keycloak realm — trimmed to just Keycloak, its runtime deps (Postgres, admin/pull secrets), and the Terraform configurator Job. Kept in this repo as a reusable reference; the real deployment lives in tch-umzh-connect-gitops."
-keywords: [argocd-template, example-app, example-org, auth.example.com, example-vault, keycloak-config-job, tf-config, configMapGenerator, kustomization.yaml, postgresql.acid.zalan.do, ExternalSecret, regcred, keycloak-admin, PostSync hook, tf-workspace, keycloak_config/clients, example-app-scopes-config, example-app-clients-config, config-source]
+recap: "argocd-template/ is a minimal sample/template of the ArgoCD/kustomize manifests that run this repo's Keycloak realm — trimmed to just Keycloak, its runtime deps (Postgres, admin/pull secrets), and a two-image (tf-config + configurator) Terraform job. Kept in this repo as a reusable reference; the real deployment lives in tch-umzh-connect-gitops."
+keywords: [argocd-template, example-app, example-org, auth.example.com, example-vault, keycloak-config-job, tf-config, configurator, configurator/Dockerfile, kustomization.yaml, postgresql.acid.zalan.do, ExternalSecret, regcred, keycloak-admin, PostSync hook, hook-delete-policy, tf-workspace, keycloak-config/clients, example_client-l1, allow_l1_debug_clients, example-app-configurator]
 ---
 
 # ArgoCD template (example)
@@ -11,6 +11,12 @@ Keycloak + a Terraform-driven realm configurator on Kubernetes. It is **not**
 used by any pipeline or ArgoCD `Application` — it's a reference/starting
 point, kept separate from the real dev deployment.
 
+Layout: `argocd/` holds the manifests + `kustomization.yaml`;
+`keycloak-config/` (top-level, sibling of `argocd/`) holds the example
+scope/client YAML; `configurator/Dockerfile` bakes `keycloak-config/` into an
+image. This mirrors `tch-umzh-connect-gitops`'s own top-level layout
+(`argocd/`, `keycloak-config/`, `configurator/`).
+
 See [`argocd-template/README.md`](../argocd-template/README.md) for the file
 list, what's intentionally omitted (jwks-server, token-validator, ingress),
 and how to adapt the placeholders for real use.
@@ -20,40 +26,55 @@ derived from), see [ai-docs/umzh-connect-gitops.md](umzh-connect-gitops.md)
 and [ai-docs/infrastructure.md](infrastructure.md) — those describe the real
 manifests living in the separate `tch-umzh-connect-gitops` repo.
 
-`keycloak-config-job.yaml` mounts two separate `configMapGenerator`-built
-ConfigMaps — `example-app-scopes-config` (from `keycloak_config/scopes.yaml`)
-and `example-app-clients-config` (from `keycloak_config/clients/*.yaml`) —
-rather than one, because `configMapGenerator` keys every entry by basename
-only and can't preserve the `clients/` nesting Terraform expects
-(`config/scopes.yaml` + `config/clients/*.yaml`, mirroring
-`keycloak/config/` in the main repo). They land at
-`/config-source/scopes.yaml` (via a `subPath` mount of the single key) and
-`/config-source/clients/` respectively, and the Job's script copies both
-onto the `tf-workspace` PVC before running Terraform.
+## Config is baked into a second image
 
-`configMapGenerator.files` has no glob or whole-directory form — verified
-against kustomize v5.8.1: both a bare directory path and a `*.yaml` glob
-fail with `"must resolve to a file"`. So onboarding a new client still means
-two edits: add the YAML under `keycloak_config/clients/`, and add its path
-to the `example-app-clients-config` generator's `files` list in
-`kustomization.yaml`.
+`keycloak-config-job.yaml` runs a single `configurator` image directly. Two
+Dockerfiles chain together:
 
-The clients copy step uses `cp -rfL` — the `-L` is required, not cosmetic.
-Kubernetes projects each (non-`subPath`) ConfigMap key as a symlink
-(`example_client-l2.yaml -> ..data/example_client-l2.yaml`); the
-`hashicorp/terraform` image is Alpine/busybox-based, and busybox `cp`
-copies symlinks as symlinks by default (unlike GNU coreutils `cp`, which
-dereferences top-level symlink arguments). Without `-L`, the copied symlink
-is dangling in its new directory (no `../data/` there) and Terraform's
-`file()` call fails with "no file exists at ../config/clients/..." even
-though the ConfigMap and source YAML are both correct. The `scopes.yaml`
-mount uses `subPath` instead, which Kubernetes materializes as a direct
-file rather than a symlink, so its copy doesn't need `-L` to work — it's
-kept for consistency with the clients copy, not because it's required
-there.
+1. Your own `tf-config` image (see this repo's `tf-config/Dockerfile` for the
+   pattern: `FROM hashicorp/terraform:<pin>`, `COPY <your terraform> /src/terraform`,
+   `COPY <your own config/> /src/config`).
+2. `configurator/Dockerfile` here: `FROM <your tf-config image>`,
+   `COPY keycloak-config/. /src/config` — this overwrites `/src/config` from
+   step 1 with this deployment's own client/scope files.
 
-Validate the template still kustomize-builds after any edit:
+The Job's script is just:
 
 ```sh
-cd argocd-template && kubectl kustomize . > /dev/null && echo OK
+mkdir -p /workspace/terraform /workspace/config
+cp -rf /src/terraform/. /workspace/terraform/
+cp -rf /src/config/. /workspace/config/
+terraform init -input=false
+terraform apply -auto-approve -input=false
+```
+
+copying both onto the `tf-workspace` PVC so `terraform.tfstate` survives Job
+re-runs even though the images themselves are immutable per tag.
+
+Onboarding a new client is therefore one step: add a file under
+`keycloak-config/clients/`, rebuild/push the `configurator` image. There's no
+second `kustomization.yaml` edit to remember — a single point of edit for
+config changes.
+
+## L1 debug client example
+
+`keycloak-config/clients/example_client-l1.yaml` demonstrates the
+[ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md) opt-in pattern: an
+`auth_level: "L1"` file alone is not enough — `keycloak-config-job.yaml`'s
+`TF_VAR_allow_l1_debug_clients` env var defaults to `"false"` so copying this
+template can't silently enable L1 debug clients; flip it to `"true"`
+per-deployment for `example_client-l1.yaml` to actually be provisioned.
+
+## `hook-delete-policy` omits `HookSucceeded`
+
+`argocd.argoproj.io/hook-delete-policy: BeforeHookCreation` (not also
+`HookSucceeded`) is deliberate: including `HookSucceeded` would delete the
+Job (and its pod logs) the instant it succeeds, leaving nothing to inspect
+after a sync. `BeforeHookCreation` alone still guarantees the next sync's
+identical-spec Job creation isn't a no-op against a leftover Job.
+
+## Validate after any edit
+
+```sh
+cd argocd-template && kubectl kustomize argocd/ > /dev/null && echo OK
 ```

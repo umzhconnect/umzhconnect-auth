@@ -5,9 +5,9 @@
 # per client to onboard - there is no implicit access, a client with no
 # file here has no KC client and cannot obtain tokens.
 #
-# Adding a file here is not enough on its own - kustomize's
-# configMapGenerator can't glob or list a whole directory, so its path must
-# also be added to the clients-config files list in kustomization.yaml.
+# Adding a file here is enough on its own - configurator/Dockerfile COPYs
+# this whole directory into the image, so there's no second kustomization
+# edit to remember (unlike the old configMapGenerator-based approach).
 #
 # Naming convention: name the file after its own client_id (never read by
 # Terraform, but keeps the two in sync for humans) - underscores within the
