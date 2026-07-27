@@ -19,12 +19,6 @@ body:form-urlencoded {
   authorization_details: [{"type":"umzh-connect-context","identifier":"{{contextReference}}"}]
 }
 
-docs {
-  Placer (hospital-a) requests an L2 token with an RFC 9396 `authorization_details` parameter naming a specific ServiceRequest. The `FhirContextMapper` turns this into a `fhirContext` claim on the token, scoping it to that one resource — this is what powers the context gate exercised in negative/04 and validation/04.
-
-  Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
-}
-
 assert {
   res.status: eq 200
   res.body.access_token: isDefined
@@ -37,16 +31,16 @@ script:pre-request {
   const crypto = require("crypto");
   const fs = require("fs");
   const path = require("path");
-
+  
   const keysDir = bru.getEnvVar("l2KeysDir") || path.resolve(bru.cwd(), "..", "keys");
-  const pem = fs.readFileSync(path.join(keysDir, "hospital-a.key"), "utf8");
-
+  const pem = fs.readFileSync(path.join(keysDir, "hospital_a-l2.key"), "utf8");
+  
   const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
   const now = Math.floor(Date.now() / 1000);
   const tokenEndpoint = `${bru.getEnvVar("keycloakUrl")}/realms/${bru.getEnvVar("realm")}/protocol/openid-connect/token`;
-
+  
   const clientId = bru.getEnvVar("placerClientId");
-  const header = { alg: "RS256", typ: "JWT", kid: "hospital-a" };
+  const header = { alg: "RS256", typ: "JWT", kid: "hospital_a-l2" };
   const payload = {
     iss: clientId,
     sub: clientId,
@@ -54,33 +48,39 @@ script:pre-request {
     exp: now + 60,
     jti: crypto.randomUUID(),
   };
-
+  
   const signingInput = `${b64url(header)}.${b64url(payload)}`;
   const signature = crypto
     .sign("RSA-SHA256", Buffer.from(signingInput), pem)
     .toString("base64url");
-
+  
   bru.setVar("placerClientAssertion", `${signingInput}.${signature}`);
 }
 
 script:post-response {
   if (res.getStatus() !== 200) return;
-
+  
   const token = res.getBody().access_token;
   bru.setVar("placerContextToken", token);
-
+  
   const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
-
+  
   test("fhirContext is present and matches contextReference", () => {
     expect(claims.fhirContext).to.be.an("array").with.length.greaterThan(0);
     expect(claims.fhirContext[0].reference).to.equal(bru.getEnvVar("contextReference"));
   });
-
+  
   test("organization_reference is present in extensions", () => {
     expect(claims.extensions?.umzhconnect?.organization_reference).to.be.a("string").that.is.not.empty;
   });
-
+  
   console.log("fhirContext:", JSON.stringify(claims.fhirContext));
   console.log("aud:", JSON.stringify(claims.aud));
   console.log("organization_reference:", claims.extensions?.umzhconnect?.organization_reference);
+}
+
+docs {
+  Placer (hospital_a) requests an L2 token with an RFC 9396 `authorization_details` parameter naming a specific ServiceRequest. The `FhirContextMapper` turns this into a `fhirContext` claim on the token, scoping it to that one resource — this is what powers the context gate exercised in negative/04 and validation/04.
+  
+  Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }

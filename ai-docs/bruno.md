@@ -1,6 +1,6 @@
 ---
 recap: "Bruno collection structure and the mandatory Node.js sandbox switch for L2 requests — QuickJS lacks crypto/fs/path."
-keywords: [Bruno, QuickJS, Node.js sandbox, unsafe, --sandbox unsafe, Developer mode, green shield, l2KeysDir, crypto module, fs module, path module, pre-request scripts, bru run, local environment, private_key_jwt, RFC 7523, L1, client_secret, placerL1ClientId, placerL1ClientSecret, m2m_l1_client_secrets, ADR 0004, docs block, docs tab, folder docs, collection docs, jwks-server, jwksServerUrl, clientId, .well-known, hospital-a.jwks.json, hosted JWKS, jwks.url, hospital-c, generateKeyPairSync, unreachable jwks_url]
+keywords: [Bruno, QuickJS, Node.js sandbox, unsafe, --sandbox unsafe, Developer mode, green shield, l2KeysDir, crypto module, fs module, path module, pre-request scripts, bru run, local environment, private_key_jwt, RFC 7523, L1, client_secret, placerL1ClientId, placerL1ClientSecret, m2m_l1_client_secrets, ADR 0004, docs block, docs tab, folder docs, collection docs, jwks-server, jwksServerUrl, clientId, .well-known, hospital_a-l2.jwks.json, hosted JWKS, jwks.url, hospital_c, generateKeyPairSync, unreachable jwks_url]
 ---
 
 # Bruno collection
@@ -37,15 +37,15 @@ All L2 token requests (`06`, `07`, `08`) get a constant ecosystem `aud` (the rea
 
 ## Hosted client JWKS (`03-client-hosted-jwks.bru`)
 
-Fetches an L2 client's own public key set from `{{jwksServerUrl}}/.well-known/{{clientId}}.jwks.json` (the local `jwks-server` container, or the equivalent APISIX-style gateway URL in `dev`) — this is the `jwks.url` Keycloak fetches to verify that client's `private_key_jwt` assertions, not the AS's own signing keys (`02-jwks.bru` covers those). Hosted under `.well-known/` by convention, filed under a name matching the client's own `client_id`, not a role name — see `keys/README.md`. The `clientId` variable defaults to `hospital-a` (the placer); there's no per-role distinction on this request, unlike the token-acquisition requests which use separate `placerClientId`/`fulfillerClientId` variables — set `clientId: hospital-b` to fetch the fulfiller's instead. No sandbox requirement — it's a plain GET.
+Fetches an L2 client's own public key set from `{{jwksServerUrl}}/.well-known/{{clientId}}.jwks.json` (the local `jwks-server` container, or the equivalent APISIX-style gateway URL in `dev`) — this is the `jwks.url` Keycloak fetches to verify that client's `private_key_jwt` assertions, not the AS's own signing keys (`02-jwks.bru` covers those). Hosted under `.well-known/` by convention, filed under a name matching the client's own `client_id`, not a role name — see `keys/README.md`. The `clientId` variable defaults to `hospital_a` (the placer); there's no per-role distinction on this request, unlike the token-acquisition requests which use separate `placerClientId`/`fulfillerClientId` variables — set `clientId: hospital_b` to fetch the fulfiller's instead. No sandbox requirement — it's a plain GET.
 
 ## Key path
 
 If Bruno cannot resolve the demo key path, set the `l2KeysDir` variable in `bruno/environments/local.bru` to the absolute path of `keys/`.
 
-## Hospital C: onboarded but unreachable jwks_url (`negative/10-unreachable-jwks-hospital-c.bru`)
+## Hospital C: onboarded but unreachable jwks_url (`negative/10-unreachable-jwks-hospital_c.bru`)
 
-`config/clients/hospital_c-l2.yaml` onboards a third demo hospital, but its `jwks_url` points at a real external host (`https://hospital-c.example/...`), not `jwks-server` — there's no matching `keys/hospital-c.key` in this repo. The pre-request script generates a throwaway RSA keypair with `crypto.generateKeyPairSync` (no file to read) purely to produce a syntactically valid assertion; the request still fails because Keycloak can't reach `hospital-c.example` to fetch/verify against in the first place.
+`config/clients/hospital_c-l2.yaml` onboards a third demo hospital, but its `jwks_url` points at a real external host (`https://hospital_c.example/...`), not `jwks-server` — there's no matching `keys/hospital_c.key` in this repo. The pre-request script generates a throwaway RSA keypair with `crypto.generateKeyPairSync` (no file to read) purely to produce a syntactically valid assertion; the request still fails because Keycloak can't reach `hospital_c.example` to fetch/verify against in the first place.
 
 ## L1 debug token (`09-get-placer-token-l1.bru`)
 

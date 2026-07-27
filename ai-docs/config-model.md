@@ -33,9 +33,9 @@ Identity, authentication, and audience config for one hospital's L2 client. A ho
 ```yaml
 client_id: "hospital_b-l2"
 client_name: "Hospital B"
-organization_reference: "https://fhir.hospital-b.example/fhir/Organization/HospitalB"
-fhir_url: "https://fhir.hospital-b.example/fhir"
-jwks_url: "https://hospital-b.example/.well-known/hospital-b.jwks.json"
+organization_reference: "https://fhir.hospital_b.example/fhir/Organization/HospitalB"
+fhir_url: "https://fhir.hospital_b.example/fhir"
+jwks_url: "https://hospital_b.example/.well-known/hospital_b-l2.jwks.json"
 auth_level: "L2"
 ```
 
@@ -63,8 +63,8 @@ An **opt-in, per-hospital** L1 (`client_secret`) debug client, defined by a file
 ```yaml
 client_id: "hospital_a-l1"
 client_name: "Hospital A"
-organization_reference: "https://fhir.hospital-a.example/fhir/Organization/HospitalA"
-fhir_url: "https://fhir.hospital-a.example/fhir"
+organization_reference: "https://fhir.hospital_a.example/fhir/Organization/HospitalA"
+fhir_url: "https://fhir.hospital_a.example/fhir"
 auth_level: "L1"
 ```
 

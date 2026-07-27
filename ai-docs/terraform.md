@@ -33,9 +33,9 @@ L2 client YAML schema (`config/clients/{client_id}.yaml`):
 ```yaml
 client_id: "hospital_b-l2"
 client_name: "Hospital B"
-organization_reference: "https://fhir.hospital-b.example/fhir/Organization/HospitalB"
-fhir_url: "https://fhir.hospital-b.example/fhir"
-jwks_url: "https://hospital-b.example/.well-known/hospital-b.jwks.json"
+organization_reference: "https://fhir.hospital_b.example/fhir/Organization/HospitalB"
+fhir_url: "https://fhir.hospital_b.example/fhir"
+jwks_url: "https://hospital_b.example/.well-known/hospital_b-l2.jwks.json"
 auth_level: "L2"
 ```
 

@@ -1,6 +1,6 @@
 ---
 recap: "Historical. D2 (named aud scopes, one client per hospital) was implemented as the default, then removed entirely in favour of a constant ecosystem aud (ADR 0003). Analysis of D2 vs RFC 8707 as alternatives, kept for reference if target-specific aud is rebuilt later."
-keywords: [D2, named aud scopes, aud:hospital-a, scope-based audience, include_in_token_scope, included_custom_audience, resource-indicators, experimental feature risk, D2 feasibility, U5, per-audience scope enforcement, ADR 0002, ADR 0003, RFC 8707, ecosystem-audience-mapper]
+keywords: [D2, named aud scopes, aud:hospital_a, scope-based audience, include_in_token_scope, included_custom_audience, resource-indicators, experimental feature risk, D2 feasibility, U5, per-audience scope enforcement, ADR 0002, ADR 0003, RFC 8707, ecosystem-audience-mapper]
 ---
 
 # D2 audience design — feasibility analysis
@@ -16,7 +16,7 @@ The original design exploration considered three approaches to binding `aud` in 
 | Design | Mechanism | Status |
 |--------|-----------|--------|
 | D1-via-YAML | One KC client per (org, app, FHIR server) | Superseded by ADR 0002 |
-| D2 | Named `aud:` scopes on the realm; caller requests `scope=aud:hospital-b` | Implemented, then removed by [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) |
+| D2 | Named `aud:` scopes on the realm; caller requests `scope=aud:hospital_b` | Implemented, then removed by [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) |
 | D3 / RFC 8707 | `resource=<fhir_url>` parameter; KC resolves against registered resource_url values | Implemented, then removed — blocked on KC's experimental support, see [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) |
 
 D2 was ruled out when per-audience scope enforcement was a requirement: in D2, the AS grants any scope the client holds regardless of which `aud:` scope is requested, so you cannot enforce different SMART scope sets per target FHIR server without separate KC clients.
@@ -35,33 +35,33 @@ No structural changes to the hospital model. Everything that is today driven fro
 |--------|-------------------|-----|
 | M2M client `{client_id}` | ✅ one per hospital | ✅ same |
 | FHIR resource-server client `{client_id}-fhir-server` | ✅ one per hospital | ❌ not needed |
-| Realm-level client scope `aud:hospital-b` | ❌ | ✅ one per hospital |
+| Realm-level client scope `aud:hospital_b` | ❌ | ✅ one per hospital |
 | Audience mapper on scope | ❌ | ✅ `included_custom_audience = fhir_url` |
 | Audience mapper on M2M client (cross-hospital) | ✅ per `allowed_targets` pair | ❌ replaced by optional scope assignment |
 
 ### Explicit allow-list
 
-`allowed_targets` in each hospital YAML still controls access. In D2, Terraform translates it to: assign `aud:hospital-b` as an **optional scope** on the `hospital-a` M2M client (rather than creating a `keycloak_openid_audience_protocol_mapper` per pair). A hospital not in `allowed_targets` cannot obtain a token scoped to that target.
+`allowed_targets` in each hospital YAML still controls access. In D2, Terraform translates it to: assign `aud:hospital_b` as an **optional scope** on the `hospital_a` M2M client (rather than creating a `keycloak_openid_audience_protocol_mapper` per pair). A hospital not in `allowed_targets` cannot obtain a token scoped to that target.
 
 ### `include_in_token_scope = false`
 
-Setting this on every `aud:` scope suppresses the scope name from the `scope` claim in the token. The audience mapper fires independently, so the token carries the correct `aud` without `aud:hospital-b` appearing in `scope`.
+Setting this on every `aud:` scope suppresses the scope name from the `scope` claim in the token. The audience mapper fires independently, so the token carries the correct `aud` without `aud:hospital_b` appearing in `scope`.
 
 ### Token request
 
 ```
 POST /realms/umzh-connect/protocol/openid-connect/token
   grant_type=client_credentials
-  client_id=hospital-a
+  client_id=hospital_a
   client_assertion=<JWT>
   client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
-  scope=aud:hospital-b
+  scope=aud:hospital_b
 ```
 
 vs. RFC 8707:
 
 ```
-  resource=https://fhir.hospital-b.example/fhir
+  resource=https://fhir.hospital_b.example/fhir
 ```
 
 ### `aud` value in the token
@@ -84,7 +84,7 @@ Using `included_custom_audience = fhir_url` on the scope's audience mapper puts 
 
 ### RFC 8707 advantages
 
-**Caller uses the FHIR URL directly.** `resource=https://fhir.hospital-b.example/fhir` is self-documenting and doesn't require the caller to know KC's internal scope naming convention. Hospital FHIR clients and SMART on FHIR tooling already understand the `resource` parameter.
+**Caller uses the FHIR URL directly.** `resource=https://fhir.hospital_b.example/fhir` is self-documenting and doesn't require the caller to know KC's internal scope naming convention. Hospital FHIR clients and SMART on FHIR tooling already understand the `resource` parameter.
 
 **Cleaner error on unknown target.** RFC 8707 returns `invalid_target` when `resource=` doesn't match any registered URL — an unambiguous protocol-level rejection. D2 returns a generic OAuth `invalid_scope` error, which is correct but less precise.
 

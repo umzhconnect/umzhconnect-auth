@@ -171,7 +171,7 @@ obtain tokens accepted anywhere in the ecosystem.
 4. Verify: the hospital acquires a token with its `client_id` and a
    signed client assertion; check the token carries the expected
    `organization_reference` and scopes (see
-   [technical.md UC-T1](technical.md#uc-t1--hospital-acquires-a-token-l2)).
+   [technical.md UC-T1](technical.md#uc-t1--hospital_acquires-a-token-l2)).
 
 **Postcondition:** hospital can authenticate and obtain tokens. Note the
 consequence of [ADR 0003](../adr/0003-constant-ecosystem-audience.md): those
@@ -192,7 +192,7 @@ private key.
 
 **Actor:** hospital (joining or rotating)
 **Trigger:** onboarding ([UC-O1](#uc-o1--onboarding-a-new-hospital)) or key
-rotation ([UC-L1](#uc-l1--hospital-rotates-its-l2-signing-key))
+rotation ([UC-L1](#uc-l1--hospital_rotates-its-l2-signing-key))
 
 **Requirements the key and JWKS must satisfy** (enforced by the KC client's
 `client-jwt` authenticator, [`clients.tf`](../../keycloak/terraform/clients.tf)):
@@ -209,7 +209,7 @@ rotation ([UC-L1](#uc-l1--hospital-rotates-its-l2-signing-key))
   the private key.
 - **Endpoint:** `jwks_url` must be a stable HTTPS URL, publicly reachable from
   Keycloak, that always serves the current JWKS (including any overlapping
-  old key during rotation — see [UC-L1](#uc-l1--hospital-rotates-its-l2-signing-key)).
+  old key during rotation — see [UC-L1](#uc-l1--hospital_rotates-its-l2-signing-key)).
   Keycloak fetches and caches this on demand; there's no push/registration
   step beyond giving the operator this URL.
 
@@ -256,7 +256,7 @@ rotation ([UC-L1](#uc-l1--hospital-rotates-its-l2-signing-key))
 give the platform operator for onboarding.
 
 **Note:** this is a one-time setup per key generation, repeated on every
-rotation ([UC-L1](#uc-l1--hospital-rotates-its-l2-signing-key)) — not a
+rotation ([UC-L1](#uc-l1--hospital_rotates-its-l2-signing-key)) — not a
 per-request step. The hospital's own signing code loads the same private key
 for every client assertion until the next rotation.
 
