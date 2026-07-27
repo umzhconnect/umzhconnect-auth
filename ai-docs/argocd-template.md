@@ -26,11 +26,10 @@ derived from), see [ai-docs/umzh-connect-gitops.md](umzh-connect-gitops.md)
 and [ai-docs/infrastructure.md](infrastructure.md) — those describe the real
 manifests living in the separate `tch-umzh-connect-gitops` repo.
 
-## No ConfigMaps — config is baked into a second image
+## Config is baked into a second image
 
-`keycloak-config-job.yaml` runs a single `configurator` image directly; there
-is no `configMapGenerator`, no ConfigMap volume, and no `subPath`/symlink
-copy quirks to work around. Two Dockerfiles chain together:
+`keycloak-config-job.yaml` runs a single `configurator` image directly. Two
+Dockerfiles chain together:
 
 1. Your own `tf-config` image (see this repo's `tf-config/Dockerfile` for the
    pattern: `FROM hashicorp/terraform:<pin>`, `COPY <your terraform> /src/terraform`,
@@ -54,19 +53,17 @@ re-runs even though the images themselves are immutable per tag.
 
 Onboarding a new client is therefore one step: add a file under
 `keycloak-config/clients/`, rebuild/push the `configurator` image. There's no
-second `kustomization.yaml` edit to remember (unlike the earlier
-`configMapGenerator`-based version of this template, which needed a file
-added to a `files:` list too — see History below).
+second `kustomization.yaml` edit to remember — a single point of edit for
+config changes.
 
 ## L1 debug client example
 
 `keycloak-config/clients/example_client-l1.yaml` demonstrates the
 [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md) opt-in pattern: an
-`auth_level: "L1"` file alone is not enough — `keycloak-config-job.yaml` also
-sets `TF_VAR_allow_l1_debug_clients: "true"` on the Job, since Terraform
-otherwise ignores L1 files with a warning. Both the per-client file and the
-per-deployment env var must agree before an L1 client is actually
-provisioned.
+`auth_level: "L1"` file alone is not enough — `keycloak-config-job.yaml`'s
+`TF_VAR_allow_l1_debug_clients` env var defaults to `"false"` so copying this
+template can't silently enable L1 debug clients; flip it to `"true"`
+per-deployment for `example_client-l1.yaml` to actually be provisioned.
 
 ## `hook-delete-policy` omits `HookSucceeded`
 
@@ -81,15 +78,3 @@ identical-spec Job creation isn't a no-op against a leftover Job.
 ```sh
 cd argocd-template && kubectl kustomize argocd/ > /dev/null && echo OK
 ```
-
-## History: superseded ConfigMap-based version
-
-An earlier version of this template used two `configMapGenerator`s
-(`example-app-scopes-config`, `example-app-clients-config`) reading a flat
-`keycloak_config/` directory, mounted into the Job via ConfigMap volumes with
-a `cp -rfL` copy step (the `-L` needed because Kubernetes projects ConfigMap
-keys as symlinks, and busybox `cp` doesn't dereference them by default).
-That approach needed two edits to onboard a client — add the YAML *and* add
-its path to the generator's `files:` list, since `configMapGenerator.files`
-has no glob/directory form. Replaced by the two-image `configurator` pattern
-above to match `tch-umzh-connect-gitops`'s current (and simpler) approach.

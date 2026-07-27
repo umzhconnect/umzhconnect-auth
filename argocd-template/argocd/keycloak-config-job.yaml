@@ -84,10 +84,11 @@ spec:
                   name: keycloak-admin
                   key: admin-password
             # Explicit opt-in to provision keycloak-config/clients/*-l1.yaml
-            # (see ADR 0004 in the main repo) - omit or set to "false" to have
-            # Terraform ignore L1 files with a warning instead.
+            # (see ADR 0004 in the main repo). Defaults to "false" so copying
+            # this template doesn't silently enable L1 debug clients - flip to
+            # "true" per-deployment if you actually need one provisioned.
             - name: TF_VAR_allow_l1_debug_clients
-              value: "true"
+              value: "false"
           volumeMounts:
             - name: workspace
               mountPath: /workspace

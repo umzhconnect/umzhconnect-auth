@@ -25,8 +25,7 @@ part of the reusable contract this repo exposes to other adopters.
 **This repo builds images only.** All ArgoCD/k8s manifests live in the
 separate **`tch-umzh-connect-gitops`** repo. That split happened after the
 first version of this work (which put `argocd/` + `kustomization.yaml`
-directly in this repo) — see "Why the gitops repo is separate" below for why,
-and "History" at the bottom for the superseded approach.
+directly in this repo) — see "Why the gitops repo is separate" below for why.
 
 ---
 
@@ -72,21 +71,21 @@ clients that shouldn't live in this repo's own `keycloak/config/` at all:
   `TF_VAR_allow_l1_debug_clients: "true"`, the opt-in ADR 0004 requires
   before Terraform will provision any `auth_level: "L1"` file — needed for
   `usz-l1.yaml` above to actually take effect.
-- `hook-delete-policy` on the Job now reads `BeforeHookCreation` only (the
-  `HookSucceeded` half mentioned in "History" below has since been dropped
-  deliberately, so the most recently finished Job — success or failure —
-  stays inspectable until the next sync's `BeforeHookCreation` clears it).
+- `hook-delete-policy` on the Job now reads `BeforeHookCreation` only —
+  `HookSucceeded` is deliberately omitted, so the most recently finished
+  Job (success or failure) stays inspectable until the next sync's
+  `BeforeHookCreation` clears it out.
 - `argocd-template/` in this repo has been updated to mirror this pattern
   (`configurator/Dockerfile`, top-level `keycloak-config/`, an
   `example_client-l1.yaml` demoing the ADR 0004 opt-in) — see
   [ai-docs/argocd-template.md](argocd-template.md).
 
-Net effect: this repo's own `tf-config` image is no longer the image
-actually deployed by `keycloak-config-job.yaml` — it's now an intermediate
-base image, one layer removed from what runs. Anything below this section
-that still says "the `tf-config` image" for the *deployed* Job image is
-describing the superseded 2026-07-03 state; the `configurator` image is
-current.
+Net effect: `keycloak-config-job.yaml` now runs the `configurator` image,
+with this repo's own `tf-config` image one layer removed as its base —
+giving deployment-specific clients (like `usz-l1.yaml` above) a place to
+live without touching this repo's own `keycloak/config/`, and keeping
+onboarding a single point of edit (add a file, rebuild the `configurator`
+image) regardless of which repo the client belongs to.
 
 ---
 
@@ -140,8 +139,9 @@ like `keycloak`/`token-validator` already were:
   files that live directly under `keys/` — enforced by directory boundary
   at the Dockerfile level, not a curated ConfigMap file list.
 
-This also fully retired the ConfigMap-based approach's `scopes.yaml` bug (see
-History) — there's no `configMapGenerator` left to omit a file from.
+Because the whole `keycloak/config` directory is baked in via `COPY`, there's
+no manually-curated file list that can omit a file by mistake — onboarding a
+new file is always a single point of edit (add it, rebuild the image).
 
 ---
 
@@ -225,7 +225,7 @@ issuer (`KC_HOSTNAME`) and token-validator's `ISSUER` env are the public
 - `argocd/namespace.yaml`, `regcred.yaml`, `keycloak-admin-secret.yaml`, `database.yaml`, `keycloak.yaml`, `token-validator.yaml`, `gateway.yaml`, `httproute.yaml` — moved as-is from this repo
 - `argocd/jwks-server.yaml` — rewritten: Deployment now references the `jwks-server` image directly (`imagePullSecrets: regcred` added since it's now a private image), no ConfigMap volume
 - `argocd/keycloak-config-job.yaml` — rewritten: single container (no more alpine initContainer), image is `tf-config`, copies `/src/terraform` + `/src/config` onto the PVC, no ConfigMap volumes
-- `argocd/kustomization.yaml` — new, lives inside `argocd/` (no more root-level workaround needed — see History), `images:` block lists all 4 images
+- `argocd/kustomization.yaml` — new, lives inside `argocd/` (no root-level workaround needed, since this repo's own `configMapGenerator` constraint no longer applies once config crosses the repo boundary as baked images), `images:` block lists all 4 images
 
 ### `tch-syseng-argocd-gitops` (sibling repo)
 
@@ -318,45 +318,16 @@ state).
 
 ---
 
-## History: superseded ConfigMap-based approach
+## Job/hook details worth keeping in mind
 
-The first version of this work put `argocd/*.yaml` + `kustomization.yaml`
-directly in this repo, with a `configMapGenerator` reading `keycloak/terraform/*.tf`,
-`keycloak/config/hospitals/*.yaml`, and `keys/*.jwks.json` straight from this
-repo's working tree, copied onto the workspace PVC by an alpine initContainer.
-That's been fully replaced by the image-baking approach above. Kept here only
-because the reasoning explains some now-otherwise-mysterious details (e.g.
-why the Job used to need an initContainer at all):
-
-- **`kustomization.yaml` had to live at the repo root, not inside `argocd/`.**
-  kustomize's `configMapGenerator` forbids file references that climb above
-  its own directory via `../` (a security restriction ArgoCD's kustomize
-  build also enforces), and the generators needed files from
-  `keycloak/terraform/`, `keycloak/config/hospitals/`, and `keys/`, all
-  siblings of `argocd/`. Verified this restriction is real (not just a style
-  choice) by reproducing the exact `kubectl kustomize` failure when testing a
-  move into `argocd/` — this is *why* a separate gitops repo needs a
-  different config-delivery mechanism entirely, not just "move the same
-  kustomization elsewhere". `--load-restrictor LoadRestrictionsNone` does fix
-  it, but that flag is only settable cluster-wide (not per-Application) —
-  rejected as out of scope and too broad a security-posture change for this
-  one app.
-- **A real bug was caught and fixed before the gitops-repo split happened:**
-  `scopes.tf` reads `config/scopes.yaml`, but neither the `configMapGenerator`
-  nor the initContainer's copy step ever sourced that file — only
-  `tf-files`/`hospital-files` existed. The first real PostSync run would have
-  failed before creating anything. This class of bug can no longer recur
-  post-split, since there's no longer a manually-curated file list to miss an
-  entry from — the `tf-config` image's `COPY keycloak/config /src/config`
-  copies the whole directory.
-- Other gotchas from that version (PostSync hook needing a fixed Job `name`,
-  needing `hook-delete-policy: BeforeHookCreation` explicitly since
+- The `keycloak-config` Job's `name` is fixed (not generated) since it's a
+  PostSync hook — ArgoCD matches hooks across syncs by name.
+- `hook-delete-policy` must be set explicitly to `BeforeHookCreation`:
   specifying the annotation at all replaces ArgoCD's default rather than
-  adding to it, bare image refs with no tag for `argocd-image-updater`)
-  still apply unchanged to the current manifests in `tch-umzh-connect-gitops`.
-  One detail *has* since changed, though: `hook-delete-policy` originally
-  also included `HookSucceeded`; that's since been dropped (see "Update
-  2026-07-24" above) so the most recent Job run stays inspectable.
+  adding to it (see "Update 2026-07-24" above for why `HookSucceeded` is
+  deliberately left out).
+- Image refs for the four published images are bare (no tag) in the
+  manifests, since `argocd-image-updater` owns tag bumps via write-back.
 
 ---
 
