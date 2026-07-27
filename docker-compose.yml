@@ -84,6 +84,7 @@ services:
       - ./keycloak:/workspace
     environment:
       TF_VAR_keycloak_url: http://keycloak:8080
+      TF_VAR_keycloak_public_url: http://localhost:8180
       TF_VAR_keycloak_admin_username: ${KEYCLOAK_ADMIN}
       TF_VAR_keycloak_admin_password: ${KEYCLOAK_ADMIN_PASSWORD}
       # Local-only opt-in for config/clients/*.yaml files with

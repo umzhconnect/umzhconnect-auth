@@ -11,7 +11,7 @@ keywords: [aud claim, audience, ADR 0002, ADR 0003, ecosystem_audience, ecosyste
 
 ## Current implementation
 
-Every M2M client carries an `ecosystem-audience-mapper` protocol mapper (`clients.tf`) that always writes a single constant value — the realm issuer URL (`${keycloak_url}/realms/umzh-connect`) — into `aud`, regardless of requested scopes. There is no per-target `aud` binding and no per-hospital inbound allow-list; any FHIR server in the realm accepts any token, and is responsible for its own authorization.
+Every M2M client carries an `ecosystem-audience-mapper` protocol mapper (`clients.tf`) that always writes a single constant value — the realm issuer URL (`${keycloak_public_url}/realms/umzh-connect`) — into `aud`, regardless of requested scopes. There is no per-target `aud` binding and no per-hospital inbound allow-list; any FHIR server in the realm accepts any token, and is responsible for its own authorization.
 
 Target-specific `aud` binding via RFC 8707 (`resource=` parameter) is deferred until Keycloak's `resource-indicators` feature is non-experimental. See [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) for the full rationale, RFC analysis, and history of the designs that preceded this one (RFC 8707 resource indicators, then D2 named `aud:` scopes gated by an `allowed_clients` allow-list — both since removed).
 
@@ -26,7 +26,7 @@ POST /realms/umzh-connect/protocol/openid-connect/token
   scope=system/Task.cru system/ServiceRequest.rs system/Patient.r
 ```
 
-Every issued token carries `aud = ${keycloak_url}/realms/umzh-connect`, independent of the requested scope.
+Every issued token carries `aud = ${keycloak_public_url}/realms/umzh-connect`, independent of the requested scope.
 
 ---
 
