@@ -208,7 +208,7 @@ resource "keycloak_openid_audience_protocol_mapper" "ecosystem_audience" {
   client_id = keycloak_openid_client.m2m[each.key].id
   name      = "ecosystem-audience-mapper"
 
-  included_custom_audience = "${var.keycloak_url}/realms/${keycloak_realm.umzh_connect.realm}"
+  included_custom_audience = "${var.keycloak_public_url}/realms/${keycloak_realm.umzh_connect.realm}"
 
   add_to_id_token     = false
   add_to_access_token = true
@@ -321,7 +321,7 @@ resource "keycloak_openid_audience_protocol_mapper" "ecosystem_audience_l1" {
   client_id = keycloak_openid_client.m2m_l1[each.key].id
   name      = "ecosystem-audience-mapper"
 
-  included_custom_audience = "${var.keycloak_url}/realms/${keycloak_realm.umzh_connect.realm}"
+  included_custom_audience = "${var.keycloak_public_url}/realms/${keycloak_realm.umzh_connect.realm}"
 
   add_to_id_token     = false
   add_to_access_token = true

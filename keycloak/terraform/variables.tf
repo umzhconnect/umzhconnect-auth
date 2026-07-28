@@ -1,5 +1,11 @@
 variable "keycloak_url" {
-  description = "Base URL of the Keycloak instance (backchannel URL when run inside docker-compose)."
+  description = "Admin REST API URL the Terraform keycloak provider connects to (backchannel — e.g. the in-cluster Service DNS when run against k8s, or the container network name in docker-compose). Not necessarily reachable by anything outside the cluster/compose network."
+  type        = string
+  default     = "http://localhost:8180"
+}
+
+variable "keycloak_public_url" {
+  description = "Publicly-reachable issuer URL — what ends up in the `aud` claim (ecosystem_audience mappers) and the informational outputs. Must match Keycloak's own KC_HOSTNAME so tokens' aud lines up with the iss every client already sees via discovery. Defaults to keycloak_url's default since local docker-compose exposes the same host for both; set explicitly wherever the admin API and public issuer diverge (e.g. k8s, where keycloak_url stays the in-cluster Service address)."
   type        = string
   default     = "http://localhost:8180"
 }

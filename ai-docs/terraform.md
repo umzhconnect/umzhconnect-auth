@@ -1,6 +1,6 @@
 ---
 recap: "Terraform structure and pitfalls — client_id-driven client generation from config/clients/ (L1 and L2 files together, split by each file's own auth_level field), constant ecosystem aud mapper, extra_config double-nesting trap, Vault secrets, apply commands, and the opt-in L1 debug client path."
-keywords: [keycloak/keycloak ~>5.0, extra_config, attributes prefix, double-nesting, jwks.url, use.jwks.url, clients.tf, scopes.tf, realm.tf, yamldecode, local.clients_by_id, local.clients_l2, local.clients_l1, TF_VAR_keycloak_url, keycloak-config, apply command, for_each, config/clients, client_id, client_name, organization_reference, jwks_url, vault, vault_kv_secret_v2, admin_password, JWT OIDC, client-id-mapper, client_id claim, RFC 9068, access.token.header.type.rfc9068, at+jwt, org-reference-mapper, fhir-context-mapper, ecosystem_audience, ecosystem-audience-mapper, included_custom_audience, auth_level, terraform_data client_config_guard, lifecycle precondition, check l1_debug_clients_ignored, m2m_l1, allow_l1_debug_clients, ADR 0003, ADR 0004]
+keywords: [keycloak/keycloak ~>5.0, extra_config, attributes prefix, double-nesting, jwks.url, use.jwks.url, clients.tf, scopes.tf, realm.tf, yamldecode, local.clients_by_id, local.clients_l2, local.clients_l1, TF_VAR_keycloak_url, TF_VAR_keycloak_public_url, keycloak_public_url, KC_HOSTNAME, keycloak-config, apply command, for_each, config/clients, client_id, client_name, organization_reference, jwks_url, vault, vault_kv_secret_v2, admin_password, JWT OIDC, client-id-mapper, client_id claim, RFC 9068, access.token.header.type.rfc9068, at+jwt, org-reference-mapper, fhir-context-mapper, ecosystem_audience, ecosystem-audience-mapper, included_custom_audience, auth_level, terraform_data client_config_guard, lifecycle precondition, check l1_debug_clients_ignored, m2m_l1, allow_l1_debug_clients, ADR 0003, ADR 0004]
 ---
 
 # Terraform
@@ -103,6 +103,15 @@ CI/CD authentication to Vault uses JWT/OIDC (no long-lived credentials). The pip
 
 For local dev, `var.keycloak_admin_password` falls back to a direct variable (set in `.env`, gitignored).
 
+## `keycloak_url` vs `keycloak_public_url`
+
+Two separate variables, both defaulting to `http://localhost:8180` (same host locally, so this split was invisible until k8s):
+
+- **`keycloak_url`** — only feeds the `keycloak` provider's `url` (`versions.tf`), i.e. where the `terraform apply` job's Admin REST client connects. Must be reachable from wherever Terraform runs — the in-cluster Service DNS (`http://keycloak:8080`) in k8s, the compose network name in docker-compose.
+- **`keycloak_public_url`** — feeds the `ecosystem_audience`/`ecosystem_audience_l1` mappers' `included_custom_audience` (`clients.tf`) and the informational `issuer`/`token_endpoint`/`discovery_endpoint`/`jwks_endpoint` outputs (`outputs.tf`). Must match Keycloak's own `KC_HOSTNAME` (set directly on the Keycloak container, e.g. `tch-umzh-connect-gitops/argocd/keycloak.yaml`) so a token's `aud` claim lines up with the `iss` every client already sees via OIDC discovery.
+
+Passing the in-cluster/compose-network address into `keycloak_url` alone (no `keycloak_public_url` override) used to leak into `aud` too, since both mapper and provider read the same variable — tokens carried `aud=http://keycloak:8080/realms/umzh-connect` instead of the public issuer. Any environment where the admin API and public issuer live at different hosts (i.e. anything beyond plain docker-compose) must set `keycloak_public_url` explicitly.
+
 ## Apply commands
 
 Re-apply after any config change:
@@ -110,8 +119,10 @@ Re-apply after any config change:
 ```sh
 # Direct (outside compose network)
 TF_VAR_keycloak_url=http://localhost:8180 \
+TF_VAR_keycloak_public_url=http://localhost:8180 \
   terraform -chdir=keycloak/terraform apply -auto-approve
 
-# Via compose (uses compose network, keycloak:8080 backchannel URL)
+# Via compose (uses compose network, keycloak:8080 backchannel URL;
+# TF_VAR_keycloak_public_url=http://localhost:8180 set in docker-compose.yml)
 docker compose up keycloak-config
 ```
