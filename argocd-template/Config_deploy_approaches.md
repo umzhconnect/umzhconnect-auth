@@ -1,48 +1,52 @@
 # Deploying realm config to Keycloak: approaches considered
 
-This document tracks how the Terraform realm config (`keycloak/terraform/`,
-`keycloak/config/`) gets from this repo into a running cluster deployment,
-why the current approach was chosen, and what alternatives exist if the
-two-image approach turns out to be too much operational overhead.
+This document tracks the options for getting the Terraform realm config
+(`keycloak/terraform/`, `keycloak/config/`) from this repo into a running
+cluster deployment. Approach #2 (layered Docker images) is the one chosen
+for this repo's ArgoCD template; the others are listed as alternatives in
+case that approach turns out to be too much operational overhead.
 
 It's written generically — in terms of "the config repo" / "the gitops
 repo" / "an object store" — so it applies to any adopter of this template,
-not just this project's own dev deployment. For this project's concrete
-repo names and exact values, see
-[ai-docs/umzh-connect-gitops.md](../ai-docs/umzh-connect-gitops.md) (internal
-doc, not part of the reusable template).
+not just this project's own dev deployment.
 
 ---
 
-## 1. Previous approach: `configMapGenerator`
+## 1. `configMapGenerator`
 
-Kustomize's `configMapGenerator` read the raw `.tf` / client YAML files
-directly off disk at kustomize-build time and generated a `ConfigMap`,
+Kustomize's `configMapGenerator` reads the raw `.tf` / client YAML files
+directly off disk at kustomize-build time and generates a `ConfigMap`,
 mounted as a volume into the Terraform `Job`.
 
-**How it worked:** the gitops repo needed its own copy of the raw config
+**How it works:** the gitops repo needs its own copy of the raw config
 files (kustomize has no cross-repo file reference — `configMapGenerator`
-only reads local paths), so files were duplicated/synced into the gitops
-repo's tree, and `kustomization.yaml` listed them individually under
-`configMapGenerator.files`.
+only reads local paths), so files are duplicated/synced into the gitops
+repo's tree, and `kustomization.yaml` lists them individually under
+`configMapGenerator.files`:
 
-**Why it was dropped:**
+```yaml
+# kustomization.yaml
+configMapGenerator:
+  - name: keycloak-realm-config
+    files:
+      - terraform/main.tf
+      - config/clients/hospital-a.yaml
+      - config/clients/hospital-b.yaml
+```
+
+**Downsides:**
 
 - **Scaling limit.** A `ConfigMap`'s total serialized size is capped by
   etcd's ~1MiB per-object value limit. Each hospital's client YAML is small,
   but the limit is shared across the whole realm's `.tf` files, scope
   definitions, and every onboarded client — it does not scale indefinitely
   as more hospitals are onboarded.
-- **Manual file sync.** Every config change had to be copied into the
+- **Manual file sync.** Every config change has to be copied into the
   gitops repo's tree by hand (or by a sync script) and listed explicitly in
   `kustomization.yaml` — a second point of edit to remember, and a place
   a file could be silently omitted from the generator's file list.
-- **No natural versioning/audit trail.** A `ConfigMap` is just current
-  state; there's no built-in way to see "what did this hospital's config
-  look like three deploys ago" without digging through the gitops repo's
-  git history for that specific file.
 
-## 2. Current approach: layered Docker images
+## 2. Layered Docker images
 
 Terraform's own `.tf` files are baked into a `tf-config` image
 (`FROM hashicorp/terraform:<pin>`, `COPY terraform/ /src/terraform`,
@@ -72,9 +76,7 @@ can go stale relative to each other.
 
 ---
 
-## Additional options to consider
-
-### 3. Config on a mounted volume (cloud object storage)
+## 3. Config on a mounted volume (cloud object storage)
 
 Store `keycloak-config/` (and optionally `terraform/`) in an Azure Storage
 Account container or an S3-compatible bucket, and mount it into the
@@ -97,9 +99,11 @@ the main container starts.
 - Introduces a new dependency: a CSI driver (or cloud CLI + credentials)
   must be available and configured in every cluster that runs this
   deployment — not just "any Kubernetes cluster with ArgoCD."
-- No natural versioning/rollback unless the bucket itself has versioning
-  enabled and something is disciplined about reading a specific version, not
-  just "latest."
+- Versioning/rollback is only as strong as the discipline enforced around
+  the bucket: if writes only ever happen via a CI job that tags what it
+  wrote, a given config state can be reproduced by re-running that tag. If
+  anything writes to the bucket outside that discipline, it's just "current
+  state" with no built-in provenance.
 - Config changes no longer go through a PR/review process by default —
   anyone with bucket write access can change what gets applied, with no git
   history unless a separate process enforces "bucket writes only via CI."
@@ -107,7 +111,7 @@ the main container starts.
   permissions — a different (and for many teams, less familiar) place to
   manage who can change a hospital's client config.
 
-### 4. Config repo cloned at Job runtime (no image involved)
+## 4. Config repo cloned at Job runtime (no image involved)
 
 Keep client/scope YAML in a git repo (could be the gitops repo itself, or a
 dedicated config-only repo), and have the Terraform `Job` clone it directly
@@ -138,7 +142,7 @@ per-hospital config.
   host is briefly unreachable, the PostSync hook fails outright rather than
   reusing a previously-pulled image.
 
-### 5. Full CI/CD sync-and-apply (config never touches the cluster via ArgoCD)
+## 5. Full CI/CD sync-and-apply (config never touches the cluster via ArgoCD)
 
 Move config delivery out of ArgoCD/Kubernetes entirely: a CI pipeline
 (triggered on merge to the config repo) runs `terraform apply` directly
@@ -169,11 +173,11 @@ own sync), using cluster/Keycloak credentials scoped to CI.
 
 ## Summary comparison
 
-| Approach | Config change requires | New infra dependency | Versioning/audit | GitOps purity |
+| Approach | Config change requires | Additional infrastructure dependency | Versioning/audit | GitOps purity |
 |---|---|---|---|---|
-| `configMapGenerator` (previous) | Manual file sync + kustomize edit | None | Weak (ConfigMap is just current state) | Full |
-| Layered images (current) | CI build + push of an image | None (uses existing registry) | Strong (image tag/digest) | Full |
-| Object storage volume | Upload to bucket | CSI driver or cloud CLI + IAM | Weak, unless bucket versioning is used deliberately | Full (Job still runs via ArgoCD hook) |
+| `configMapGenerator` | Manual file sync + kustomize edit | None | Weak (ConfigMap is just current state) | Full |
+| Layered images | CI build + push of an image | None (uses existing registry) | Strong (image tag/digest) | Full |
+| Object storage volume | Upload to bucket | CSI driver or cloud CLI + IAM | Depends on write discipline — strong if only CI writes tagged state, weak otherwise | Full (Job still runs via ArgoCD hook) |
 | Git clone at Job runtime | `git push` | Git credentials + egress from Job | Strong (git history), but not pinned unless SHA-parameterized | Full |
 | CI/CD apply (bypasses ArgoCD) | `git push` + CI apply | Standing CI→cluster credentials | Strong (git + CI logs), but split across two systems | Broken — cluster can drift from ArgoCD's view |
 
