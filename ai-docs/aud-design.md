@@ -23,7 +23,7 @@ POST /realms/umzh-connect/protocol/openid-connect/token
   client_id=hospital_a
   client_assertion=<JWT>
   client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
-  scope=system/Task.cru system/ServiceRequest.rs system/Patient.r
+  scope=system/Task.crus system/ServiceRequest.rs system/Patient.r
 ```
 
 Every issued token carries `aud = ${keycloak_public_url}/realms/umzh-connect`, independent of the requested scope.

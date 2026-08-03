@@ -20,7 +20,7 @@ Governed by the FHIR IG at `https://build.fhir.org/ig/umzhconnect/umzhconnect-ig
 
 ## SMART on FHIR
 
-**System scopes** — standardized permission language: `system/<ResourceType>.<action>` (e.g. `system/Patient.r`, `system/Task.cru`). The `system/` prefix means M2M — no user logged in.
+**System scopes** — standardized permission language: `system/<ResourceType>.<action>` (e.g. `system/Patient.r`, `system/Task.crus`). The `system/` prefix means M2M — no user logged in.
 
 **Backend Services** — instead of a client secret, clients authenticate with `private_key_jwt` signed with their private key, validated against registered JWKS. No shared secrets at Level 2.
 

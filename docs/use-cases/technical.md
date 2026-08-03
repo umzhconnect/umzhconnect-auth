@@ -36,7 +36,7 @@ grant_type=client_credentials
 &client_id={client_id}
 &client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
 &client_assertion=<JWT signed with the hospital's private key>
-&scope=system/Task.cru system/ServiceRequest.rs system/Patient.r
+&scope=system/Task.crus system/ServiceRequest.rs system/Patient.r
 ```
 The client assertion must have `iss` = `sub` = `{client_id}` and `aud` = the
 realm token endpoint (RFC 7523 §3). `scope` must list every scope the caller
@@ -170,7 +170,7 @@ Content-Type: application/x-www-form-urlencoded
 grant_type=client_credentials
 &client_id={client_id}
 &client_secret=<Keycloak-generated secret>
-&scope=system/Task.cru system/ServiceRequest.rs system/Patient.r
+&scope=system/Task.crus system/ServiceRequest.rs system/Patient.r
 ```
 
 **Expected token (JWT):** same shape as [UC-T1](#uc-t1--hospital_acquires-a-token-l2)
