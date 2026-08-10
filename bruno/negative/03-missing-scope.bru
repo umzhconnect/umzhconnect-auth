@@ -15,7 +15,7 @@ auth:bearer {
 }
 
 docs {
-  placerL2Token (auth/06) requests `system/Task.cru system/ServiceRequest.rs system/Patient.r` — not `system/Organization.r`. No scope is ever included in a token unless explicitly requested (scopes.yaml registers every scope as optional, none as default), so this token has no `system/Organization.r` and the read is rejected. Run auth/06 first to obtain placerL2Token.
+  placerL2Token (auth/06) requests `system/Task.crus system/ServiceRequest.rs system/Patient.r` — not `system/Organization.r`. No scope is ever included in a token unless explicitly requested (scopes.yaml registers every scope as optional, none as default), so this token has no `system/Organization.r` and the read is rejected. Run auth/06 first to obtain placerL2Token.
 }
 
 assert {

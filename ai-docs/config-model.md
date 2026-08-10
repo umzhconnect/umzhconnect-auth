@@ -86,8 +86,8 @@ All custom SMART Backend Services client scopes for the realm. Terraform reads t
 
 ```yaml
 scopes:
-  - name: "system/Task.cru"
-    description: "SMART system scope: create/read/update Tasks"
+  - name: "system/Task.crus"
+    description: "SMART system scope: create/read/update/search Tasks"
   # ... (see the file for the full list)
 ```
 
