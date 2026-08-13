@@ -1,0 +1,57 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: umzhc-auth
+
+resources:
+  - ns.yaml
+  - keycloak.yaml
+  - keycloak-config-job.yaml
+  - ingress.yaml
+
+# --- Approach 1: config delivered as ConfigMaps (no configurator image) ------
+# The Terraform module and the client/scope YAML are generated into ConfigMaps
+# and mounted into the keycloak-config Job. Kustomize appends a content hash to
+# each name, so editing any file rolls the Job and re-applies. Kept as three
+# ConfigMaps so the Job can reconstruct the terraform/ + keycloak-config/{scopes,clients}
+# layout the module expects.
+configMapGenerator:
+  # Terraform module — a COPY of ../../terraform (kustomize can't read
+  # files outside its root, so it lives in-tree here). Re-sync when the module
+  # changes:  cp terraform/*.tf terraform/.terraform.lock.hcl argocd-usz/argocd/terraform/
+  - name: kc-terraform
+    files:
+      - terraform/clients.tf
+      - terraform/realm.tf
+      - terraform/scopes.tf
+      - terraform/variables.tf
+      - terraform/versions.tf
+      - terraform/outputs.tf
+      - terraform/.terraform.lock.hcl
+  # Realm scope vocabulary.
+  - name: kc-scopes
+    files:
+      - keycloak-config/scopes.yaml
+  # One entry PER CLIENT. Adding a client = drop a file in
+  # keycloak-config/clients/ and add its path here (the one extra edit Approach
+  # 1 costs vs a globbed clone — see README "Migration to Approach 4").
+  - name: kc-clients
+    files:
+      - keycloak-config/clients/example_client-l2.yaml
+
+# Secrets are intentionally NOT listed here during the "plain secrets" phase:
+# create them out-of-band (see secrets/README.md) so real credentials never
+# land in git. When you move to sealed-secrets, kubeseal each plain Secret
+# into a SealedSecret manifest (safe to commit) and add them here:
+#   - secrets/regcred.sealed.yaml
+#   - secrets/keycloak-admin.sealed.yaml
+#   - secrets/keycloak-db.sealed.yaml
+
+images:
+  # Your custom Keycloak image (manual push → set the tag you pushed).
+  - name: harbor-registry.io.usz.ch/prj-0011608-umzhc/keycloak
+    newTag: latest
+  # Stock terraform image served from Harbor. Adjust newName to your Harbor
+  # Docker Hub proxy-cache path if it differs from the project below.
+  - name: hashicorp/terraform
+    newName: harbor-registry.io.usz.ch/prj-0011608-umzhc/hashicorp/terraform
+    newTag: '1.9'

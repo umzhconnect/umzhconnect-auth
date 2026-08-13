@@ -1,0 +1,38 @@
+# =============================================================================
+# Override: run the local stack against an EXTERNAL / managed Postgres
+# instead of the bundled `postgres` container.
+#
+# Usage:
+#   cp .env.managed-db.example .env.managed-db     # then fill in your DB details
+#   docker compose \
+#     --env-file .env --env-file .env.managed-db \
+#     -f docker-compose.yml -f docker-compose.managed-db.yml \
+#     up -d --build
+#
+# The `!reset` YAML tag (Docker Compose >= 2.24) removes the bundled postgres
+# service entirely and drops Keycloak's dependency on it, so nothing tries to
+# start a local database. Everything else (keycloak-config Terraform apply,
+# jwks-server, token-validator) is unchanged and still talks to Keycloak over
+# the compose network.
+#
+# Prerequisites on the managed instance:
+#   - the target database (default `keycloak`) already exists
+#   - the user has privileges to create/modify its schema (Keycloak creates
+#     its own tables on first boot, but NOT the database itself)
+#   - the host is reachable from this machine (VPN / firewall allowlist)
+# =============================================================================
+
+services:
+  # Remove the bundled Postgres container completely.
+  postgres: !reset null
+
+  keycloak:
+    # No longer wait on (or require) the bundled postgres container.
+    depends_on: !reset null
+    environment:
+      # Point Keycloak at the managed Postgres. sslmode=require is a safe
+      # default for a managed instance; switch to verify-full (and mount a CA)
+      # for full cert verification, or disable if you terminate TLS elsewhere.
+      KC_DB_URL: jdbc:postgresql://${MANAGED_DB_HOST}:${MANAGED_DB_PORT}/${MANAGED_DB_NAME}?sslmode=${MANAGED_DB_SSLMODE}
+      KC_DB_USERNAME: ${MANAGED_DB_USER}
+      KC_DB_PASSWORD: ${MANAGED_DB_PASSWORD}
