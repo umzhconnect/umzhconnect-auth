@@ -1,4 +1,4 @@
-# `config/clients/*.yaml`
+# `keycloak-config/clients/*.yaml`
 
 One file per hospital M2M client. `client_id` and `auth_level` in the file
 content — not the filename or directory — are what Terraform reads to

@@ -35,7 +35,7 @@ variable "environment" {
 }
 
 # Gates local.clients_l1 in clients.tf: when false (the default), any
-# config/clients/*.yaml file with auth_level: "L1" is ignored — no L1
+# keycloak-config/clients/*.yaml file with auth_level: "L1" is ignored — no L1
 # client is created for it, and a "l1_debug_clients_ignored" check block
 # emits a warning (terraform apply still succeeds) naming the ignored
 # file(s). Defaults to false so provisioning an L1 (client_secret) debug
@@ -47,7 +47,7 @@ variable "environment" {
 # See ADR 0004 (docs/adr/0004-reinstate-l1-debug-client.md) and CLAUDE.md's
 # "L1 only as an explicit opt-in debug client" rule.
 variable "allow_l1_debug_clients" {
-  description = "Explicit opt-in permitting L1 (client_secret) debug clients to be provisioned. False (default) silently ignores config/clients/*.yaml files with auth_level: \"L1\" (with a warning), in every environment including local dev — set to true via TF_VAR_allow_l1_debug_clients or tfvars to enable them."
+  description = "Explicit opt-in permitting L1 (client_secret) debug clients to be provisioned. False (default) silently ignores keycloak-config/clients/*.yaml files with auth_level: \"L1\" (with a warning), in every environment including local dev — set to true via TF_VAR_allow_l1_debug_clients or tfvars to enable them."
   type        = bool
   default     = false
 }

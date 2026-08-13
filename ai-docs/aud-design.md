@@ -32,7 +32,7 @@ Every issued token carries `aud = ${keycloak_public_url}/realms/umzh-connect`, i
 
 ## Adding a hospital
 
-1. Create `config/clients/*.yaml` with `client_id`, `client_name`, `organization_reference`, `fhir_url`, `jwks_url`, and `auth_level: "L2"`.
+1. Create `keycloak-config/clients/*.yaml` with `client_id`, `client_name`, `organization_reference`, `fhir_url`, `jwks_url`, and `auth_level: "L2"`.
 2. Run `terraform apply` — KC creates the M2M client and its protocol mappers, including the constant ecosystem audience mapper.
 
 No allow-list configuration is needed; there is no cross-hospital audience mechanism to gate.

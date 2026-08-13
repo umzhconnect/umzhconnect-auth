@@ -19,7 +19,7 @@ body:form-urlencoded {
 }
 
 docs {
-  Hospital C is onboarded (`config/clients/hospital_c-l2.yaml` exists, so Terraform provisions its KC client) but its `jwks_url` points at a real external host (`https://hospital_c.example/.well-known/jwks.json`), not the local `jwks-server` — unlike hospital_a/hospital_b, there's no matching `keys/hospital_c.key` or `keys/.well-known/hospital_c.jwks.json` demo material in this repo.
+  Hospital C is onboarded (`keycloak-config/clients/hospital_c-l2.yaml` exists, so Terraform provisions its KC client) but its `jwks_url` points at a real external host (`https://hospital_c.example/.well-known/jwks.json`), not the local `jwks-server` — unlike hospital_a/hospital_b, there's no matching `keys/hospital_c.key` or `keys/.well-known/hospital_c.jwks.json` demo material in this repo.
 
   The pre-request script generates a throwaway RSA keypair purely to produce a syntactically valid RFC 7523 assertion — the signature itself is irrelevant to this test, since Keycloak can't reach `hospital_c.example` from this environment to fetch the JWKS and verify it against in the first place. The request must fail regardless of what key signed it.
 

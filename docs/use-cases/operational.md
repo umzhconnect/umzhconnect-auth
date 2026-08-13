@@ -7,7 +7,7 @@ configuration changes, lifecycle management, and incident response.
 Everything in this document follows two invariants:
 
 1. **All Keycloak state is Terraform-managed from VCS.** Every KC client is
-   generated from a `config/clients/*.yaml` file (its own `auth_level` field
+   generated from a `keycloak-config/clients/*.yaml` file (its own `auth_level` field
    determines whether it's L1 or L2); every realm scope from a
    `scopes.yaml` config file (see "Where hospital/scope config actually
    lives" below for where those files live in your environment). Never
@@ -15,12 +15,12 @@ Everything in this document follows two invariants:
    reverted on the next `terraform apply` and is lost in disaster recovery
    ([UC-L5](#uc-l5--disaster-recovery)).
 2. **One primary (L2) KC client per hospital, provisioned explicitly.** A
-   hospital with no `config/clients/*.yaml` file with `auth_level: "L2"` has
+   hospital with no `keycloak-config/clients/*.yaml` file with `auth_level: "L2"` has
    no KC client and cannot obtain tokens ([ADR 0002](../adr/0002-one-client-per-hospital.md)).
    The primary, production integration path is always `private_key_jwt` (L2).
    `client_secret` (L1) is **not** a production path — it exists only as an
    explicit, per-hospital, opt-in **debug client**
-   (a `config/clients/*.yaml` file with `auth_level: "L1"`, [ADR
+   (a `keycloak-config/clients/*.yaml` file with `auth_level: "L1"`, [ADR
    0004](../adr/0004-reinstate-l1-debug-client.md)) for connectivity
    troubleshooting, alongside — never instead of — the L2 client. Every
    token carries a required `extensions.umzhconnect.auth_level` claim
@@ -36,8 +36,8 @@ reinstate L1 as a debug client](../adr/0004-reinstate-l1-debug-client.md).
 
 ## Where hospital/scope config actually lives
 
-This repo ships the Terraform *logic* (`keycloak/terraform/*.tf`) and, as a
-convenience, a `keycloak/config/` YAML tree so the local docker-compose stack
+This repo ships the Terraform *logic* (`terraform/*.tf`) and, as a
+convenience, a `keycloak-config/` YAML tree so the local docker-compose stack
 has something to apply out of the box — that copy is a demonstration fixture
 only, not a production config source.
 
@@ -51,7 +51,7 @@ hospital never requires rebuilding or republishing anything from this repo.
 See [`argocd-template/README.md`](../../argocd-template/README.md) for the
 exact file layout.
 
-So throughout this document, "edit `keycloak/config/clients/*.yaml`"
+So throughout this document, "edit `keycloak-config/clients/*.yaml`"
 means: edit that file in whichever location is authoritative for your
 environment — this repo's copy for the local docker-compose demo, or the
 equivalent file in your deployment repo's `keycloak_config/` directory
@@ -72,7 +72,7 @@ deferral and its revisit condition.
 | "We want a separate client per application" | One client per hospital; all apps of a hospital share one identity. Revisit when the Policy Server arrives | [ADR 0002](../adr/0002-one-client-per-hospital.md) |
 | "Tokens for our FHIR server should only work for us" (per-target `aud`) | `aud` is a constant ecosystem value; target-specific audience binding is deferred until Keycloak supports RFC 8707 non-experimentally | [ADR 0003](../adr/0003-constant-ecosystem-audience.md) |
 | "Only hospitals X and Y should get tokens for our server" (inbound allow-list) | There is no per-hospital allow-list of any kind; FHIR servers are responsible for their own authorization | [ADR 0003](../adr/0003-constant-ecosystem-audience.md) |
-| "Grant scope S only to hospital X" | Scopes are realm-wide: every scope in `config/scopes.yaml` is requestable by every M2M client (none is assigned by default). Per-(caller, target) scope enforcement is a Policy Server concern | [ADR 0002](../adr/0002-one-client-per-hospital.md) |
+| "Grant scope S only to hospital X" | Scopes are realm-wide: every scope in `keycloak-config/scopes.yaml` is requestable by every M2M client (none is assigned by default). Per-(caller, target) scope enforcement is a Policy Server concern | [ADR 0002](../adr/0002-one-client-per-hospital.md) |
 | "We want mTLS / DPoP (L3)" | L3 is out of scope until specified by the IG; the `auth_level` claim is deferred with it | [ADR 0001](../adr/0001-defer-auth-level-claim.md) |
 
 ---
@@ -91,7 +91,7 @@ All subsequent operations assume this has been completed.
 1. Build and publish the four images this repo produces: `keycloak` (custom
    image with the `FhirContextMapper` JAR bundled in), `token-validator`,
    `tf-config` (a Terraform image built from this repo's
-   `keycloak/terraform/` logic only — no hospital/scope config), and
+   `terraform/` logic only — no hospital/scope config), and
    `jwks-server`.
 2. Set up Keycloak, its Postgres database, and a configurator `Job` that
    runs `terraform apply` against the running instance as a post-deploy hook
@@ -127,7 +127,7 @@ docker compose up keycloak-config   # applies Terraform (or run it on the host, 
 Admin console at `http://localhost:8180`. To run Terraform directly on the
 host instead of via the compose service:
 ```sh
-TF_VAR_keycloak_url=http://localhost:8180 terraform -chdir=keycloak/terraform apply
+TF_VAR_keycloak_url=http://localhost:8180 terraform -chdir=terraform apply
 ```
 
 ---
@@ -150,21 +150,21 @@ obtain tokens accepted anywhere in the ecosystem.
 | `organization_reference` | Canonical FHIR `Organization` reference URL — embedded by the AS in every token as `extensions.umzhconnect.organization_reference`; resource servers use it for consent lookup |
 | `fhir_url` | Base URL of the hospital's own FHIR server (recorded for reference; not written into `aud` — see [ADR 0003](../adr/0003-constant-ecosystem-audience.md)) |
 | `jwks_url` | Public HTTPS endpoint where the hospital publishes the JWKS for its L2 signing key. Must be reachable from Keycloak |
-| `auth_level` | Must be `"L2"` — this field (not the directory or filename) is what routes the file into the L2 client map; a `check "known_auth_level"` block hard-fails `apply` if any `config/clients/*.yaml` file has a value other than `"L1"`/`"L2"` |
+| `auth_level` | Must be `"L2"` — this field (not the directory or filename) is what routes the file into the L2 client map; a `check "known_auth_level"` block hard-fails `apply` if any `keycloak-config/clients/*.yaml` file has a value other than `"L1"`/`"L2"` |
 
 **Steps:**
 1. Create a YAML file with the six fields above — recommended filename
    `{client_id}.yaml` (e.g. `hospital_a-l2.yaml`), though Terraform only
    reads the `client_id` field, never the filename — in your environment's
    hospital config location: the local docker-compose demo's
-   `keycloak/config/clients/`, or your deployment repo's equivalent
+   `keycloak-config/clients/`, or your deployment repo's equivalent
    directory modeled on [`./argocd-template`](../../argocd-template) (see
    "Where hospital/scope config actually lives" above).
 2. PR review and merge, in whichever repo that file lives.
 3. `terraform apply` (see [UC-O4](#uc-o4--rolling-out-a-config-change-per-environment)
    for how this happens per environment). Terraform creates the KC client
    named by `client_id` with service account, `private_key_jwt` auth against
-   the registered `jwks_url`, every scope from `config/scopes.yaml` registered
+   the registered `jwks_url`, every scope from `keycloak-config/scopes.yaml` registered
    as optional (none assigned by default — see [UC-O2](#uc-o2--adding-or-removing-a-realm-scope)),
    and the four protocol mappers (`client_id`, org reference, FHIR context,
    ecosystem audience).
@@ -195,7 +195,7 @@ private key.
 rotation ([UC-L1](#uc-l1--hospital_rotates-its-l2-signing-key))
 
 **Requirements the key and JWKS must satisfy** (enforced by the KC client's
-`client-jwt` authenticator, [`clients.tf`](../../keycloak/terraform/clients.tf)):
+`client-jwt` authenticator, [`clients.tf`](../../terraform/clients.tf)):
 
 - **Key type/size:** RSA, 2048 bits minimum.
 - **Algorithm:** `RS256`. Keycloak's `private_key_jwt` verification defaults
@@ -272,7 +272,7 @@ is retired.
 
 **Steps:**
 1. Edit `scopes.yaml` in your environment's config location (the local
-   docker-compose demo's `keycloak/config/scopes.yaml`, or your deployment
+   docker-compose demo's `keycloak-config/scopes.yaml`, or your deployment
    repo's equivalent modeled on [`./argocd-template`](../../argocd-template) —
    see "Where hospital/scope config actually lives" above): add or remove an
    entry under `scopes`. Every scope is registered on every hospital client
@@ -302,7 +302,7 @@ A hospital changes a property of its registration — most commonly the
 **Trigger:** infrastructure change, org metadata update
 
 **Steps:**
-1. Edit the hospital's L2 file in `config/clients/` in your environment's
+1. Edit the hospital's L2 file in `keycloak-config/clients/` in your environment's
    hospital config location (see "Where hospital/scope config actually lives" above).
 2. PR review and merge, in whichever repo that file lives.
 3. `terraform apply` — the KC client is updated in place.
@@ -329,8 +329,8 @@ hospital/scope config actually lives" above.
 
 | Change | Kubernetes (ArgoCD or similar) | Local (docker-compose), for development |
 |--------|--------------------------------|------------------------------------------|
-| Hospital or scope YAML only | Edit the file in your deployment repo's config directory and merge. If your deployment uses ArgoCD (or an equivalent GitOps controller) watching that repo, it detects the commit on its own and re-triggers the configurator Job, which re-runs `terraform apply` with state persisted on a PVC — no image rebuild needed. See [`argocd-template/`](../../argocd-template) for the manifest shape (`keycloak_config/`, `kustomization.yaml`'s `configMapGenerator`, the PostSync Job) | `docker compose up keycloak-config`, or `terraform -chdir=keycloak/terraform apply` with `TF_VAR_keycloak_url=http://localhost:8180` |
-| `.tf` logic (`keycloak/terraform/**`) | Publish a new `tf-config` image from this repo, then update your deployment repo's manifest to reference the new image tag/digest (manually, or via whatever image-automation your deployment uses — outside this repo's scope) so the configurator Job picks it up on its next run | Same as above — `docker compose up --build keycloak-config` picks up the local `.tf` changes directly |
+| Hospital or scope YAML only | Edit the file in your deployment repo's config directory and merge. If your deployment uses ArgoCD (or an equivalent GitOps controller) watching that repo, it detects the commit on its own and re-triggers the configurator Job, which re-runs `terraform apply` with state persisted on a PVC — no image rebuild needed. See [`argocd-template/`](../../argocd-template) for the manifest shape (`keycloak_config/`, `kustomization.yaml`'s `configMapGenerator`, the PostSync Job) | `docker compose up keycloak-config`, or `terraform -chdir=terraform apply` with `TF_VAR_keycloak_url=http://localhost:8180` |
+| `.tf` logic (`terraform/**`) | Publish a new `tf-config` image from this repo, then update your deployment repo's manifest to reference the new image tag/digest (manually, or via whatever image-automation your deployment uses — outside this repo's scope) so the configurator Job picks it up on its next run | Same as above — `docker compose up --build keycloak-config` picks up the local `.tf` changes directly |
 
 Production deployments are not yet standardized by this repo; the delivery
 target is a config snapshot for `umzhconnect/umzhconnect-auth` (pending).
@@ -360,12 +360,12 @@ to isolate
    to avoid implementing `private_key_jwt`. If the hospital wants a
    long-term `client_secret` integration, decline per the "Requests you must
    decline" table above.
-2. Create a file in `config/clients/` (in the local docker-compose demo's
-   `keycloak/config/clients/`, or your deployment repo's equivalent — see
+2. Create a file in `keycloak-config/clients/` (in the local docker-compose demo's
+   `keycloak-config/clients/`, or your deployment repo's equivalent — see
    "Where hospital/scope config actually lives" above) with `client_id`
    (convention: `{hospital_name}-l1`), `client_name`, `organization_reference`,
    `fhir_url`, and `auth_level: "L1"` — see [the directory's
-   README](../../keycloak/config/clients/README.md) for the field
+   README](../../keycloak-config/clients/README.md) for the field
    schema. Independent of the L2 file for the same hospital: it may have an
    L1 file, an L2 file, both, or neither, in any order.
 3. PR review and merge, in whichever repo that file lives.
@@ -384,7 +384,7 @@ to isolate
 
 **Postcondition:** hospital can obtain L1 debug tokens alongside (or instead
 of, if it hasn't onboarded L2 yet) its L2 client. Revoking L1 access mirrors
-offboarding: delete the hospital's `config/clients/*.yaml` file with
+offboarding: delete the hospital's `keycloak-config/clients/*.yaml` file with
 `auth_level: "L1"` and `terraform apply` — this is independent of, and does not affect, the
 hospital's L2 client.
 
@@ -427,7 +427,7 @@ A hospital leaves the network or is decommissioned.
 **Trigger:** contract end, decommissioning
 
 **Steps:**
-1. Delete the hospital's L2 file from `config/clients/` in your environment's
+1. Delete the hospital's L2 file from `keycloak-config/clients/` in your environment's
    hospital config location (see "Where hospital/scope config actually
    lives" above). There is no allow-list or grants file to clean up
    elsewhere.
@@ -454,7 +454,7 @@ so re-enabling later requires no coordination with the hospital.
 justify offboarding
 
 **Steps:**
-1. Edit the client's file in `config/clients/` (either L1 or L2) in your
+1. Edit the client's file in `keycloak-config/clients/` (either L1 or L2) in your
    environment's hospital config location (see "Where hospital/scope config
    actually lives" above): add `enabled: false`.
 2. PR review and merge, in whichever repo that file lives.
@@ -482,7 +482,7 @@ faster than the normal PR + apply cycle.
 
 **Options, fastest first:**
 - **Disable via config, expedited** — add `enabled: false` to the client's
-  `config/clients/*.yaml` file ([UC-L2a](#uc-l2a--temporarily-disabling-a-client))
+  `keycloak-config/clients/*.yaml` file ([UC-L2a](#uc-l2a--temporarily-disabling-a-client))
   and fast-track the PR + `terraform apply`. This is the normal, VCS-tracked
   path — prefer it even under incident time pressure.
 - **Disable in the KC admin console, as a documented emergency exception** —

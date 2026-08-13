@@ -45,7 +45,7 @@ security hardening.
 
 | Repo | Owns |
 |---|---|
-| `tch-umzh-connect-authentication-server` (this repo) | Dockerfiles + CI for all 4 published images; the Terraform/config source files those images package (`keycloak/terraform/`, `keycloak/config/`) |
+| `tch-umzh-connect-authentication-server` (this repo) | Dockerfiles + CI for all 4 published images; the Terraform/config source files those images package (`terraform/`, `keycloak-config/`) |
 | `tch-umzh-connect-gitops` | All ArgoCD/k8s manifests (`argocd/*.yaml`, `argocd/kustomization.yaml`); its own top-level `configurator/Dockerfile` + `keycloak-config/`, layering deployment-specific clients on top of this repo's `tf-config` image |
 | `tch-syseng-argocd-gitops` | The `Application` CR that points ArgoCD at `tch-umzh-connect-gitops` |
 
@@ -66,7 +66,7 @@ images** and the gitops repo's manifests reference them by tag — exactly
 like `keycloak`/`token-validator` already were:
 
 - **`tf-config`** (`tf-config/Dockerfile`, `FROM hashicorp/terraform:1.9`) —
-  `COPY keycloak/terraform /src/terraform`, `COPY keycloak/config /src/config`.
+  `COPY terraform /src/terraform`, `COPY keycloak-config /src/keycloak-config`.
   The `keycloak-config` Job copies `/src/*` onto its `tf-workspace` PVC before
   running `terraform apply`, so `terraform.tfstate` still persists across Job
   re-runs even though the image itself is immutable per tag.
@@ -77,7 +77,7 @@ like `keycloak`/`token-validator` already were:
   files that live directly under `keys/` — enforced by directory boundary
   at the Dockerfile level, not a curated ConfigMap file list.
 
-Because the whole `keycloak/config` directory is baked in via `COPY`, there's
+Because the whole `config` directory is baked in via `COPY`, there's
 no manually-curated file list that can omit a file by mistake — onboarding a
 new file is always a single point of edit (add it, rebuild the image).
 
@@ -85,11 +85,11 @@ new file is always a single point of edit (add it, rebuild the image).
 
 `tch-umzh-connect-gitops` layers its own deployment-specific clients on top,
 one level further than the `tf-config` bake above — for clients that
-shouldn't live in this repo's own `keycloak/config/` at all:
+shouldn't live in this repo's own `keycloak-config/` at all:
 
 - Top-level `configurator/` + `keycloak-config/`, alongside `argocd/`.
   `configurator/Dockerfile` is `FROM ghcr.io/trifork/tch-umzh-connect-authentication-server-tf-config:latest`
-  + `COPY keycloak-config/. /src/config` — overwriting `/src/config` from the
+  + `COPY keycloak-config/. /src/keycloak-config` — overwriting `/src/keycloak-config` from the
   `tf-config` image with the gitops repo's own client/scope files.
 - `ci-configurator.yml` (same shared `build-image.yml` template as the other
   four images) builds and pushes it as
@@ -103,14 +103,14 @@ shouldn't live in this repo's own `keycloak/config/` at all:
   `hospital_b-l2.yaml`, `hospital_c-l2.yaml`, plus two additions that live
   *only* in the gitops repo: `hospital_d-l2.yaml` (`enabled: false` — a
   disabled fake client kept around for exercising the
-  [client-enabled-flag](../keycloak/config/clients) config path without a
+  [client-enabled-flag](../keycloak-config/clients) config path without a
   real hospital) and `usz-l1.yaml` (an `auth_level: "L1"` debug client,
   requested by USZ per [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md)).
 - `argocd/keycloak-config-job.yaml` runs this `configurator` image directly,
-  not `tf-config` — both `/src/terraform` and `/src/config` are already
+  not `tf-config` — both `/src/terraform` and `/src/keycloak-config` are already
   present in it, so the copy step is just
   `cp -rf /src/terraform/. /workspace/terraform/` +
-  `cp -rf /src/config/. /workspace/config/`. Its env sets
+  `cp -rf /src/keycloak-config/. /workspace/keycloak-config/`. Its env sets
   `TF_VAR_allow_l1_debug_clients: "true"` (the opt-in ADR 0004 requires
   before Terraform provisions any `auth_level: "L1"` file) so `usz-l1.yaml`
   actually takes effect. `argocd/kustomization.yaml`'s `images:` list pins
@@ -144,7 +144,7 @@ adopters — see [ai-docs/argocd-template.md](argocd-template.md).
 |---|---|---|---|
 | `postgres` | `postgresql.acid.zalan.do` CR (Zalando postgres-operator, already running in the dev cluster), 5Gi PVC. Operator auto-creates credentials Secret `keycloak.umzh-connect-db.credentials.postgresql.acid.zalan.do` (keys `username`, `password`) | — | `argocd/database.yaml` |
 | `keycloak` | Deployment + Service, still `start-dev` (sandbox parity) | `keycloak/Dockerfile` | `argocd/keycloak.yaml` |
-| `keycloak-config` (terraform apply) | k8s `Job`, ArgoCD `PostSync` hook, single container. Copies the `configurator` image's baked-in `/src/terraform` + `/src/config` onto a persistent workspace PVC (`tf-workspace`, 1Gi) before `terraform apply`, so `terraform.tfstate` survives hook re-runs | `tf-config/Dockerfile` here, layered by `tch-umzh-connect-gitops`'s own `configurator/Dockerfile` (see "The gitops repo's own configurator layer" above) | `argocd/keycloak-config-job.yaml` |
+| `keycloak-config` (terraform apply) | k8s `Job`, ArgoCD `PostSync` hook, single container. Copies the `configurator` image's baked-in `/src/terraform` + `/src/keycloak-config` onto a persistent workspace PVC (`tf-workspace`, 1Gi) before `terraform apply`, so `terraform.tfstate` survives hook re-runs | `tf-config/Dockerfile` here, layered by `tch-umzh-connect-gitops`'s own `configurator/Dockerfile` (see "The gitops repo's own configurator layer" above) | `argocd/keycloak-config-job.yaml` |
 | `jwks-server` | Deployment + Service; image bakes in only the public `*.jwks.json` files (see deviation above) | `jwks-server/Dockerfile` | `argocd/jwks-server.yaml` |
 | `token-validator` | Deployment + Service | `token-validator/Dockerfile` | `argocd/token-validator.yaml` |
 | N/A (new) | `Gateway` (kgateway) + `HTTPRoute` (+ https-redirect route) publishing Keycloak at `https://auth.umzh.dev.example.com` | — | `argocd/gateway.yaml`, `argocd/httproute.yaml` |
@@ -166,7 +166,7 @@ issuer (`KC_HOSTNAME`) and token-validator's `ISSUER` env are the public
 - Postgres credentials Secret (operator-managed): `keycloak.umzh-connect-db.credentials.postgresql.acid.zalan.do`
 - Keycloak admin Secret: `keycloak-admin` (keys `admin-username`/`admin-password`, dev-only plaintext `admin`/`admin`)
 - GHCR pull secret: `regcred` (ExternalSecret from the org's secrets manager) — also mounted by `jwks-server` and `keycloak-config`, since their images are private GHCR images too
-- jwks-server Service: `jwks-server`, port `80` — matches what's already baked into `keycloak/config/clients/hospital_{a,b}-l2.yaml` (`jwks_url: http://jwks-server/...`), confirmed by grep
+- jwks-server Service: `jwks-server`, port `80` — matches what's already baked into `keycloak-config/clients/hospital_{a,b}-l2.yaml` (`jwks_url: http://jwks-server/...`), confirmed by grep
 - token-validator Service: `token-validator`, port `8086`
 - TF workspace PVC: `tf-workspace` (1Gi), Job name `keycloak-config`
 - Public dev issuer: `https://auth.umzh.dev.example.com` → `https://auth.umzh.dev.example.com/realms/umzh-connect`
@@ -182,7 +182,7 @@ issuer (`KC_HOSTNAME`) and token-validator's `ISSUER` env are the public
 
 - `keycloak/Dockerfile` — final stage renamed to `AS prodimage`
 - `token-validator/Dockerfile` — final stage renamed to `AS prodimage`
-- `tf-config/Dockerfile` — new; packages `keycloak/terraform` + `keycloak/config`
+- `tf-config/Dockerfile` — new; packages `terraform` + `config`
 - `jwks-server/Dockerfile` — new; packages the two public JWKS files
 - `.github/workflows/ci-keycloak.yml` — new, bespoke build+push
 - `.github/workflows/ci-token-validator.yml` — new, bespoke build+push
@@ -196,7 +196,7 @@ issuer (`KC_HOSTNAME`) and token-validator's `ISSUER` env are the public
 
 - `argocd/namespace.yaml`, `regcred.yaml`, `keycloak-admin-secret.yaml`, `database.yaml`, `keycloak.yaml`, `token-validator.yaml`, `gateway.yaml`, `httproute.yaml` — moved as-is from this repo
 - `argocd/jwks-server.yaml` — Deployment references the `jwks-server` image directly (`imagePullSecrets: regcred`, since it's a private image), no ConfigMap volume
-- `argocd/keycloak-config-job.yaml` — single container (no initContainer), runs the `configurator` image, copies `/src/terraform` + `/src/config` onto the PVC, no ConfigMap volumes
+- `argocd/keycloak-config-job.yaml` — single container (no initContainer), runs the `configurator` image, copies `/src/terraform` + `/src/keycloak-config` onto the PVC, no ConfigMap volumes
 - `argocd/kustomization.yaml` — lives inside `argocd/` (no root-level workaround needed, since this repo's own `configMapGenerator` constraint doesn't apply once config crosses the repo boundary as baked images), `images:` block lists all 4 base images plus `-configurator`
 - `configurator/Dockerfile`, `keycloak-config/clients/*.yaml`, `.github/workflows/ci-configurator.yml` — the gitops repo's own config layer, see "The gitops repo's own configurator layer" above
 
@@ -242,10 +242,10 @@ cd <path-to>/tch-syseng-argocd-gitops/argocd/overlays/dev/applications
 kubectl kustomize . > /tmp/apps.yaml && echo OK
 
 # jwks_url values already match the in-cluster service name
-grep -rn "jwks_url" keycloak/config/clients/
+grep -rn "jwks_url" keycloak-config/clients/
 
 # No stray .tfvars files that would be missing from the tf-config image
-ls keycloak/terraform/*.tfvars 2>/dev/null || echo none
+ls terraform/*.tfvars 2>/dev/null || echo none
 ```
 
 What has **not** been verified (can't be, without cluster access / a real

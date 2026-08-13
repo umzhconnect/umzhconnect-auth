@@ -6,7 +6,7 @@
 # convention only (recommended: name the file after client_id).
 #
 # All client files — both L1 and L2 — live together in
-# keycloak/config/clients/*.yaml; each file's own auth_level field (not its
+# keycloak-config/clients/*.yaml; each file's own auth_level field (not its
 # filename or directory) determines whether it's an L2 or L1 client. A
 # hospital with no L2 file has no L2 KC client and cannot obtain tokens via
 # the standard path.
@@ -31,8 +31,8 @@
 #     docs/adr/0004-reinstate-l1-debug-client.md
 
 locals {
-  _client_files = fileset("${path.module}/../config/clients", "*.yaml")
-  _client_list  = [for f in local._client_files : yamldecode(file("${path.module}/../config/clients/${f}"))]
+  _client_files = fileset("${path.module}/../keycloak-config/clients", "*.yaml")
+  _client_list  = [for f in local._client_files : yamldecode(file("${path.module}/../keycloak-config/clients/${f}"))]
 
   # Grouped by client_id using the "..." collector — unlike a plain
   # {for c in list : c.client_id => c} map, this doesn't hard-error on a
@@ -54,7 +54,7 @@ locals {
   clients_l1 = var.allow_l1_debug_clients ? local.clients_l1_all : {}
 }
 
-# Repo-wide config/clients/*.yaml invariants that must hard-fail the apply.
+# Repo-wide keycloak-config/clients/*.yaml invariants that must hard-fail the apply.
 # These aren't tied to any single client resource, so they're expressed as
 # preconditions on a no-op terraform_data resource rather than "check"
 # blocks — a failed "check" assertion only produces a warning and lets the
@@ -68,7 +68,7 @@ resource "terraform_data" "client_config_guard" {
     # seen per client_id).
     precondition {
       condition     = length(local._duplicate_client_ids) == 0
-      error_message = "config/clients/ contains duplicate client_id value(s) across multiple files: ${join(", ", local._duplicate_client_ids)}. Each client_id must be unique across config/clients/*.yaml."
+      error_message = "keycloak-config/clients/ contains duplicate client_id value(s) across multiple files: ${join(", ", local._duplicate_client_ids)}. Each client_id must be unique across keycloak-config/clients/*.yaml."
     }
 
     # A typo'd auth_level would otherwise silently match neither clients_l2
@@ -76,18 +76,18 @@ resource "terraform_data" "client_config_guard" {
     # and no warning.
     precondition {
       condition     = alltrue([for k, c in local.clients_by_id : contains(["L1", "L2"], c.auth_level)])
-      error_message = "config/clients/ contains file(s) with an auth_level other than \"L1\" or \"L2\": ${join(", ", [for k, c in local.clients_by_id : "${k}=\"${c.auth_level}\"" if !contains(["L1", "L2"], c.auth_level)])}."
+      error_message = "keycloak-config/clients/ contains file(s) with an auth_level other than \"L1\" or \"L2\": ${join(", ", [for k, c in local.clients_by_id : "${k}=\"${c.auth_level}\"" if !contains(["L1", "L2"], c.auth_level)])}."
     }
   }
 }
 
-# Warns (does not fail apply) when config/clients/ has L1 file(s) but
+# Warns (does not fail apply) when keycloak-config/clients/ has L1 file(s) but
 # allow_l1_debug_clients is false — those files are being ignored, not
 # provisioned. Set allow_l1_debug_clients=true to enable them (see ADR 0004).
 check "l1_debug_clients_ignored" {
   assert {
     condition     = var.allow_l1_debug_clients || length(local.clients_l1_all) == 0
-    error_message = "config/clients/ contains ${length(local.clients_l1_all)} L1 file(s) (${join(", ", keys(local.clients_l1_all))}) but allow_l1_debug_clients=false — these L1 debug clients are being ignored, not provisioned. Set allow_l1_debug_clients=true to enable them (see ADR 0004, docs/adr/0004-reinstate-l1-debug-client.md)."
+    error_message = "keycloak-config/clients/ contains ${length(local.clients_l1_all)} L1 file(s) (${join(", ", keys(local.clients_l1_all))}) but allow_l1_debug_clients=false — these L1 debug clients are being ignored, not provisioned. Set allow_l1_debug_clients=true to enable them (see ADR 0004, docs/adr/0004-reinstate-l1-debug-client.md)."
   }
 }
 
@@ -215,7 +215,7 @@ resource "keycloak_openid_audience_protocol_mapper" "ecosystem_audience" {
 }
 
 # ---------------------------------------------------------------------------
-# L1 debug clients — one per keycloak/config/clients/*.yaml file with
+# L1 debug clients — one per keycloak-config/clients/*.yaml file with
 # auth_level: "L1" (ADR 0004). Independent of the L2 client for the same
 # hospital. Client secret is Keycloak-generated (not set here); see
 # outputs.tf for how it's surfaced. Secret handling for these is
