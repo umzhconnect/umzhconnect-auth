@@ -24,7 +24,7 @@ authenticates with the hospital's shared client identity via `private_key_jwt`
 (RFC 7523) and receives an access token.
 
 **Actor:** hospital application
-**Precondition:** hospital is onboarded (a `config/clients/*.yaml` file with
+**Precondition:** hospital is onboarded (a `keycloak-config/clients/*.yaml` file with
 `auth_level: "L2"` exists and Terraform has been applied); the app holds the private key matching
 the JWKS published at the registered `jwks_url`.
 **Request:**
@@ -52,7 +52,7 @@ here, even ones the caller is otherwise entitled to request
 | payload | `iss` | realm issuer URL |
 | payload | `aud` | **constant ecosystem value** — the realm issuer URL, identical for every hospital and every target ([ADR 0003](../adr/0003-constant-ecosystem-audience.md)) |
 | payload | `client_id` | `{client_id}` (RFC 9068 §2.2; hardcoded mapper, distinct from `azp`) |
-| payload | `scope` | exactly the scopes requested in the token request's `scope` parameter, from `config/scopes.yaml`'s registered scopes — none is ever included by default |
+| payload | `scope` | exactly the scopes requested in the token request's `scope` parameter, from `keycloak-config/scopes.yaml`'s registered scopes — none is ever included by default |
 | payload | `extensions.umzhconnect.organization_reference` | the hospital's `organization_reference` — set by the AS, never by the caller |
 | payload | `extensions.umzhconnect.auth_level` | `"L2"` — hardcoded, required on every token ([ADR 0004](../adr/0004-reinstate-l1-debug-client.md)); resource servers use this to distinguish L2 from an L1 debug token ([UC-T8](#uc-t8--debug-client-acquires-an-l1-token), [UC-R6](#uc-r6--rs-enforces-a-minimum-auth_level)) |
 | payload | `exp` | now + 300 s |
@@ -96,7 +96,7 @@ return 403 to such a token ([UC-R4](#uc-r4--rs-enforces-fhircontext)).
 ### UC-T4 — Requesting scopes
 
 The app passes an explicit `scope` parameter naming entries from
-`config/scopes.yaml` (e.g. `scope=smart-task-write`). Every scope in that
+`keycloak-config/scopes.yaml` (e.g. `scope=smart-task-write`). Every scope in that
 file is registered as optional on every client — there is no "default" tier
 that's included without being asked for.
 
@@ -104,7 +104,7 @@ that's included without being asked for.
 and nothing else. Scopes are registered realm-wide — any onboarded hospital
 may request any of them; there is no per-hospital grant (scope-level
 authorization is a resource-server / future Policy Server concern). A scope
-not listed in `config/scopes.yaml` at all returns `invalid_scope`; a scope
+not listed in `keycloak-config/scopes.yaml` at all returns `invalid_scope`; a scope
 that exists but wasn't requested is simply absent from the token, not an
 error — resource-server checks ([UC-R](#uc-r--token-use-at-the-resource-server))
 then reject any access that needed it.
@@ -159,7 +159,7 @@ connectivity issues (firewalls, proxies, JWKS reachability) that are harder
 to diagnose through L2's signed-assertion flow.
 
 **Actor:** hospital application (debug/test tooling)
-**Precondition:** a `config/clients/*.yaml` file with `auth_level: "L1"` exists
+**Precondition:** a `keycloak-config/clients/*.yaml` file with `auth_level: "L1"` exists
 for the hospital and Terraform has been applied; the hospital holds the Keycloak-generated
 `client_secret` for its L1 `client_id` (convention: `{hospital_name}-l1`).
 **Request:**

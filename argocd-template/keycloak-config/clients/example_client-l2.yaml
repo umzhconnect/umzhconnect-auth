@@ -1,5 +1,5 @@
 # Example M2M client onboarding file. Terraform reads one file per client
-# under config/clients/ to create a KC client + its trust anchor; whether a
+# under keycloak-config/clients/ to create a KC client + its trust anchor; whether a
 # file is L1 or L2 is read from its own auth_level field, not its filename
 # or directory (see ai-docs/config-model.md in the main repo). Add one file
 # per client to onboard - there is no implicit access, a client with no

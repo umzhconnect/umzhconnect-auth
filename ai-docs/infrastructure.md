@@ -1,6 +1,6 @@
 ---
 recap: "docker-compose stack — services, the KC_HOSTNAME_BACKCHANNEL_DYNAMIC split between internal and published URLs, and the jwks-server role. Also covers the dev k8s deployment: manifests live in the separate tch-umzh-connect-gitops repo, this repo only builds the images (keycloak, token-validator, tf-config, jwks-server) they reference."
-keywords: [KC_HOSTNAME_BACKCHANNEL_DYNAMIC, keycloak:8080, localhost:8180, backchannel URL, published issuer, jwks-server, nginx, token-validator, keycloak-config, start-dev, production hardening, TF_VAR_keycloak_url, apisix, compose network, tch-umzh-connect-gitops, kgateway, Gateway, HTTPRoute, postgres-operator, postgresql.acid.zalan.do, umzh-connect namespace, auth.umzh.dev.example.com, tf-workspace, tf-config, ci-keycloak.yml, ci-token-validator.yml, ci-tf-config.yml, ci-jwks-server.yml, argocd-image-updater, allow_l1_debug_clients, TF_VAR_allow_l1_debug_clients, config/clients, ADR 0004, jwks.umzh.dev.vilea.ch, trafficpolicy-ip-whitelist, TrafficPolicy, 03-client-hosted-jwks.bru]
+keywords: [KC_HOSTNAME_BACKCHANNEL_DYNAMIC, keycloak:8080, localhost:8180, backchannel URL, published issuer, jwks-server, nginx, token-validator, keycloak-config, start-dev, production hardening, TF_VAR_keycloak_url, apisix, compose network, tch-umzh-connect-gitops, kgateway, Gateway, HTTPRoute, postgres-operator, postgresql.acid.zalan.do, umzh-connect namespace, auth.umzh.dev.example.com, tf-workspace, tf-config, ci-keycloak.yml, ci-token-validator.yml, ci-tf-config.yml, ci-jwks-server.yml, argocd-image-updater, allow_l1_debug_clients, TF_VAR_allow_l1_debug_clients, keycloak-config/clients, ADR 0004, jwks.umzh.dev.vilea.ch, trafficpolicy-ip-whitelist, TrafficPolicy, 03-client-hosted-jwks.bru]
 ---
 
 # Infrastructure
@@ -40,7 +40,7 @@ terraform apply
 
 ## Enabling L1 debug clients locally
 
-`allow_l1_debug_clients` (`keycloak/terraform/variables.tf`, default `false`) gates whether `config/clients/*.yaml` files with `auth_level: "L1"` are actually provisioned — see [terraform.md](terraform.md) and [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md). By default `docker compose up keycloak-config` **ignores** any `config/clients/` file with `auth_level: "L1"` (e.g. the `hospital_a-l1.yaml` example) and only logs a warning; it does not create the L1 client.
+`allow_l1_debug_clients` (`terraform/variables.tf`, default `false`) gates whether `keycloak-config/clients/*.yaml` files with `auth_level: "L1"` are actually provisioned — see [terraform.md](terraform.md) and [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md). By default `docker compose up keycloak-config` **ignores** any `keycloak-config/clients/` file with `auth_level: "L1"` (e.g. the `hospital_a-l1.yaml` example) and only logs a warning; it does not create the L1 client.
 
 `docker-compose.yml`'s `keycloak-config` service now forwards this through explicitly:
 
@@ -67,7 +67,7 @@ docker compose run --rm -e TF_VAR_allow_l1_debug_clients=true keycloak-config
 
 Either way, this is a local convenience only — do not commit a non-`false` default for `TF_VAR_allow_l1_debug_clients` in `docker-compose.yml`, and don't carry the override into any shared/prod compose or gitops manifest; see the "Safeguard" note in [terraform.md](terraform.md).
 
-After enabling, fetch the generated secret with `terraform output -json m2m_l1_client_secrets` (from `keycloak/terraform/`, or `docker compose exec keycloak-config terraform output ...` if run inside the container) to use with `bruno/auth/09-get-placer-token-l1.bru`.
+After enabling, fetch the generated secret with `terraform output -json m2m_l1_client_secrets` (from `terraform/`, or `docker compose exec keycloak-config terraform output ...` if run inside the container) to use with `bruno/auth/09-get-placer-token-l1.bru`.
 
 ## Dev k8s deployment (ArgoCD)
 
@@ -89,7 +89,7 @@ into an image** by this repo and referenced by tag, same as `keycloak`/
 |---|---|---|---|
 | `postgres` | `postgresql.acid.zalan.do` CR (Zalando postgres-operator, already in the dev cluster), 5Gi PVC. Operator auto-creates a credentials Secret `keycloak.umzh-connect-db.credentials.postgresql.acid.zalan.do` | — | `argocd/database.yaml` |
 | `keycloak` | Deployment + Service, still `start-dev` | `keycloak/Dockerfile` | `argocd/keycloak.yaml` |
-| `keycloak-config` | k8s `Job`, ArgoCD `PostSync` hook. Runs `terraform apply` using the `.tf` files and hospital/scope config baked into the `tf-config` image at `/src`; the container copies them onto a persistent workspace (`tf-workspace` PVC) before applying, so `terraform.tfstate` survives across hook re-runs — otherwise every sync would try to recreate an already-existing realm | `tf-config/Dockerfile` (`FROM hashicorp/terraform:1.9`, `COPY keycloak/terraform`, `COPY keycloak/config`) | `argocd/keycloak-config-job.yaml` |
+| `keycloak-config` | k8s `Job`, ArgoCD `PostSync` hook. Runs `terraform apply` using the `.tf` files and hospital/scope config baked into the `tf-config` image at `/src`; the container copies them onto a persistent workspace (`tf-workspace` PVC) before applying, so `terraform.tfstate` survives across hook re-runs — otherwise every sync would try to recreate an already-existing realm | `tf-config/Dockerfile` (`FROM hashicorp/terraform:1.9`, `COPY terraform`, `COPY config`) | `argocd/keycloak-config-job.yaml` |
 | `jwks-server` | Deployment + Service serving only the public `*.jwks.json` files — the image bakes in just those two files, so the "never serve the demo private `.key` files over HTTP" rule is enforced at build time instead of a manually curated ConfigMap file list | `jwks-server/Dockerfile` (`FROM nginx:1.27-alpine`, `COPY keys/*.jwks.json`) | `argocd/jwks-server.yaml` |
 | `token-validator` | Deployment + Service | `token-validator/Dockerfile` | `argocd/token-validator.yaml` |
 

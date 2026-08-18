@@ -27,7 +27,7 @@ That requirement was explicitly dropped in ADR 0002 and ADR 0003. FHIR servers a
 
 ## What D2 looks like in the current model
 
-No structural changes to the hospital model. Everything that is today driven from `config/clients/*.yaml` (L2 files, `auth_level: "L2"`) continues as-is.
+No structural changes to the hospital model. Everything that is today driven from `keycloak-config/clients/*.yaml` (L2 files, `auth_level: "L2"`) continues as-is.
 
 ### KC objects
 

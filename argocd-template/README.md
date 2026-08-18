@@ -26,7 +26,7 @@ configurator job — the smallest set needed to get a working realm:
 | `argocd/keycloak-config-job.yaml` | PostSync `Job` (+ PVC) that runs `terraform apply` against the running Keycloak to provision the realm |
 | `argocd/kustomization.yaml` | Wires the above together |
 | `keycloak-config/scopes.yaml` | Example client-scope config, read by Terraform |
-| `keycloak-config/clients/example_client-l2.yaml` | Example per-client onboarding file (L2/`private_key_jwt`), read by Terraform — mirrors `keycloak/config/clients/*.yaml` in the main repo |
+| `keycloak-config/clients/example_client-l2.yaml` | Example per-client onboarding file (L2/`private_key_jwt`), read by Terraform — mirrors `keycloak-config/clients/*.yaml` in the main repo |
 | `keycloak-config/clients/example_client-l1.yaml` | Example L1 (`client_secret`) debug client, demonstrating the ADR 0004 opt-in pattern |
 | `configurator/Dockerfile` | Layers `keycloak-config/` on top of your `tf-config` image, so the Job needs no ConfigMap |
 
@@ -35,10 +35,10 @@ Note the two config sources are deliberately different: Terraform's own
 your own `tf-config/Dockerfile` — see this repo's for the pattern), while
 `keycloak-config/` (client/scope YAML) is baked into a second,
 `configurator` image built from `configurator/Dockerfile`
-(`FROM <your tf-config image>`, `COPY keycloak-config/. /src/config`) that
-layers on top of it and overwrites `/src/config`. `keycloak-config-job.yaml`
+(`FROM <your tf-config image>`, `COPY keycloak-config/. /src/keycloak-config`) that
+layers on top of it and overwrites `/src/keycloak-config`. `keycloak-config-job.yaml`
 runs that `configurator` image directly — both `/src/terraform` and
-`/src/config` are already present, so there's no ConfigMap, no kustomize
+`/src/keycloak-config` are already present, so there's no ConfigMap, no kustomize
 `configMapGenerator`, and no second edit anywhere to remember when
 onboarding a client. This also means deployment-specific clients (e.g. a
 throwaway test client for one environment only) don't need to touch your
@@ -47,7 +47,7 @@ whatever repo builds the `configurator` image.
 
 Terraform state must still survive Job re-runs (otherwise every sync would
 try to re-create an already-existing realm), so the Job copies both
-`/src/terraform` and `/src/config` onto a persistent `tf-workspace` PVC on
+`/src/terraform` and `/src/keycloak-config` onto a persistent `tf-workspace` PVC on
 every start, and only the resulting `terraform.tfstate` is kept across runs.
 
 ## What's deliberately left out

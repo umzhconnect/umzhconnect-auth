@@ -1,10 +1,10 @@
-# SMART Backend Services client scopes — sourced from config/scopes.yaml.
+# SMART Backend Services client scopes — sourced from keycloak-config/scopes.yaml.
 #
 # All custom scope definitions live in the YAML; this file is pure plumbing.
-# To add, remove, or rename a scope, edit config/scopes.yaml and re-apply.
+# To add, remove, or rename a scope, edit keycloak-config/scopes.yaml and re-apply.
 
 locals {
-  _scopes_config = yamldecode(file("${path.module}/../config/scopes.yaml"))
+  _scopes_config = yamldecode(file("${path.module}/../keycloak-config/scopes.yaml"))
 
   # Flat map of all scope definitions by name.
   all_scope_defs = { for s in local._scopes_config.scopes : s.name => s }

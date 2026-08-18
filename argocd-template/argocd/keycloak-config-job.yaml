@@ -4,7 +4,7 @@
 # Image is this template's own "configurator" image (../configurator/Dockerfile),
 # which layers keycloak-config/ on top of your tf-config image (Terraform
 # module baked in at /src/terraform by your own tf-config Dockerfile). Both
-# /src/terraform and /src/config are already in the image, so no ConfigMap
+# /src/terraform and /src/keycloak-config are already in the image, so no ConfigMap
 # is needed - onboarding a client is "add a file under keycloak-config/clients/,
 # rebuild the configurator image", not a kustomize edit. Terraform state must
 # still survive Job re-runs (otherwise every sync would try to re-create an
@@ -65,9 +65,9 @@ spec:
             - sh
             - -c
             - |
-              mkdir -p /workspace/terraform /workspace/config
+              mkdir -p /workspace/terraform /workspace/keycloak-config
               cp -rf /src/terraform/. /workspace/terraform/
-              cp -rf /src/config/. /workspace/config/
+              cp -rf /src/keycloak-config/. /workspace/keycloak-config/
               terraform init -input=false
               terraform apply -auto-approve -input=false
           env:

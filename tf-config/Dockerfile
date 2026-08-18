@@ -4,5 +4,5 @@
 # tfstate-persisting PVC before running terraform, so this image can be
 # treated as read-only/immutable at every sync.
 FROM hashicorp/terraform:1.9
-COPY keycloak/terraform /src/terraform
-COPY keycloak/config /src/config
+COPY terraform /src/terraform
+COPY keycloak-config /src/keycloak-config

@@ -73,21 +73,24 @@ services:
       - umzh-auth-net
 
   # One-shot job: applies the Terraform realm configuration against the
-  # running Keycloak. State is written to ./keycloak/terraform (gitignored).
+  # running Keycloak. State is written to ./terraform (gitignored).
   # Re-run after config changes with:  docker compose up keycloak-config
   keycloak-config:
     image: hashicorp/terraform:1.9
     container_name: umzh-auth-keycloak-config
-    # Mount the whole keycloak/ directory so Terraform can read ../config/.
+    # Mount the Terraform module and the config it reads as siblings, matching
+    # the module's ${path.module}/../config assumption (keycloak-config/ and terraform/
+    # are repo-root siblings since the concern-segregation restructure).
     working_dir: /workspace/terraform
     volumes:
-      - ./keycloak:/workspace
+      - ./terraform:/workspace/terraform
+      - ./keycloak-config:/workspace/keycloak-config
     environment:
       TF_VAR_keycloak_url: http://keycloak:8080
       TF_VAR_keycloak_public_url: http://localhost:8180
       TF_VAR_keycloak_admin_username: ${KEYCLOAK_ADMIN}
       TF_VAR_keycloak_admin_password: ${KEYCLOAK_ADMIN_PASSWORD}
-      # Local-only opt-in for config/clients/*.yaml files with
+      # Local-only opt-in for keycloak-config/clients/*.yaml files with
       # auth_level: "L1" (ADR 0004). Defaults to false (safe) unless
       # TF_VAR_allow_l1_debug_clients=true is exported
       # in the host shell before `docker compose up keycloak-config` — see

@@ -1,7 +1,7 @@
 # Deploying realm config to Keycloak: approaches considered
 
 This document tracks the options for getting the Terraform realm config
-(`keycloak/terraform/`, `keycloak/config/`) from this repo into a running
+(`terraform/`, `keycloak-config/`) from this repo into a running
 cluster deployment. Approach #2 (layered Docker images) is the one chosen
 for this repo's ArgoCD template; the others are listed as alternatives in
 case that approach turns out to be too much operational overhead.
@@ -30,8 +30,8 @@ configMapGenerator:
   - name: keycloak-realm-config
     files:
       - terraform/main.tf
-      - config/clients/hospital-a.yaml
-      - config/clients/hospital-b.yaml
+      - keycloak-config/clients/hospital-a.yaml
+      - keycloak-config/clients/hospital-b.yaml
 ```
 
 **Downsides:**
@@ -50,11 +50,11 @@ configMapGenerator:
 
 Terraform's own `.tf` files are baked into a `tf-config` image
 (`FROM hashicorp/terraform:<pin>`, `COPY terraform/ /src/terraform`,
-`COPY config/ /src/config`). A second `configurator` image layers on top
-(`FROM <tf-config image>`, `COPY keycloak-config/. /src/config`),
-overwriting `/src/config` with the deployment's own client/scope files. The
+`COPY keycloak-config/ /src/keycloak-config`). A second `configurator` image layers on top
+(`FROM <tf-config image>`, `COPY keycloak-config/. /src/keycloak-config`),
+overwriting `/src/keycloak-config` with the deployment's own client/scope files. The
 `configurator` image is what the ArgoCD `PostSync` `Job` actually runs: it
-copies `/src/terraform` and `/src/config` onto a persistent `tf-workspace`
+copies `/src/terraform` and `/src/keycloak-config` onto a persistent `tf-workspace`
 PVC (so `terraform.tfstate` survives Job re-runs) and runs
 `terraform apply`.
 

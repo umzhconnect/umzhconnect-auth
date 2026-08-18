@@ -42,7 +42,7 @@ This starts:
 | Service | URL | Notes |
 |---------|-----|-------|
 | Keycloak | http://localhost:8180 | admin / admin; issuer `http://localhost:8180/realms/umzh-connect` |
-| keycloak-config | — | one-shot Terraform apply configuring the realm; state lands in `keycloak/terraform/` (gitignored) |
+| keycloak-config | — | one-shot Terraform apply configuring the realm; state lands in `terraform/` (gitignored) |
 | jwks-server | http://localhost:8085 | serves the L2 demo client JWKS |
 | token-validator | http://localhost:8086 | `POST /validate`, `GET /healthz`, mock FHIR endpoints |
 
@@ -52,7 +52,7 @@ After a Terraform config change, re-apply with:
 docker compose up keycloak-config
 ```
 
-(or run `terraform apply` directly in `keycloak/terraform/` with
+(or run `terraform apply` directly in `terraform/` with
 `TF_VAR_keycloak_url=http://localhost:8180`).
 
 ### Smoke test
@@ -120,12 +120,12 @@ To swap this Keycloak into `umzhconnect-sandbox`:
    with this repo's `keycloak/` build (it already contains the mapper — the
    sandbox's `keycloak-mapper-build` service and the `--import-realm` flag and
    realm/provider volume mounts become unnecessary).
-2. Update `keycloak/config/clients/*-l2.yaml` with the sandbox JWKS endpoint
+2. Update `keycloak-config/clients/*-l2.yaml` with the sandbox JWKS endpoint
    URLs (e.g. `jwks_url: "http://apisix-placer-external:9080/jwks.json"`),
    then apply:
    ```sh
    TF_VAR_keycloak_url=http://localhost:8180 \
-     terraform -chdir=keycloak/terraform apply -auto-approve
+     terraform -chdir=terraform apply -auto-approve
    ```
 3. The realm name, issuer URL (`http://localhost:8180/realms/umzh-connect`),
    SMART scope vocabulary, and custom claims match the sandbox realm export.

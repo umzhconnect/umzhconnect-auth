@@ -33,17 +33,17 @@ Dockerfiles chain together:
 
 1. Your own `tf-config` image (see this repo's `tf-config/Dockerfile` for the
    pattern: `FROM hashicorp/terraform:<pin>`, `COPY <your terraform> /src/terraform`,
-   `COPY <your own config/> /src/config`).
+   `COPY <your own keycloak-config/> /src/keycloak-config`).
 2. `configurator/Dockerfile` here: `FROM <your tf-config image>`,
-   `COPY keycloak-config/. /src/config` — this overwrites `/src/config` from
+   `COPY keycloak-config/. /src/keycloak-config` — this overwrites `/src/keycloak-config` from
    step 1 with this deployment's own client/scope files.
 
 The Job's script is just:
 
 ```sh
-mkdir -p /workspace/terraform /workspace/config
+mkdir -p /workspace/terraform /workspace/keycloak-config
 cp -rf /src/terraform/. /workspace/terraform/
-cp -rf /src/config/. /workspace/config/
+cp -rf /src/keycloak-config/. /workspace/keycloak-config/
 terraform init -input=false
 terraform apply -auto-approve -input=false
 ```

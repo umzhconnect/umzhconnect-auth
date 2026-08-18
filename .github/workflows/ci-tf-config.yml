@@ -11,8 +11,8 @@ on:
     branches: [main]
     paths:
       - "tf-config/**"
-      - "keycloak/terraform/**"
-      - "keycloak/config/**"
+      - "terraform/**"
+      - "keycloak-config/**"
       - ".github/workflows/ci-tf-config.yml"
       - ".github/workflows/build-image.yml"
 
