@@ -26,7 +26,7 @@ below for how this is meant to evolve.
 | Ingress / TLS | nginx `Ingress` + cert-manager (`clusterissuer-acme-nginx`) on the internal host; cert Secret `auth.dev.umzhc.io.usz.ch-cert` |
 | Database | **External managed Postgres**, creds in a plain `keycloak-db` Secret (no in-cluster DB) |
 | Secrets | Plain now (created out-of-band); migrate to sealed-secrets later |
-| Namespace | `umzhc-auth-test` |
+| Namespace | `auth` |
 | Keycloak mode | `start-dev` (matches the dev cluster) — see hardening note below |
 
 ## Images
@@ -51,7 +51,7 @@ Client/scope changes and `.tf` changes ship as ConfigMaps (a `git` commit) —
 ```
 argocd-usz/argocd/          <- ArgoCD Application points here (kustomize root)
 ├── kustomization.yaml       # resources + 3 configMapGenerators + images
-├── namespace.yaml
+├── ns.yaml                  # Namespace: auth
 ├── keycloak.yaml            # Deployment + Service -> managed Postgres
 ├── keycloak-config-job.yaml # PostSync: stock terraform image, mounts the ConfigMaps
 ├── ingress.yaml
@@ -83,35 +83,35 @@ cp terraform/*.tf terraform/.terraform.lock.hcl argocd-usz/argocd/terraform/
 
 ## Step 1 — build & push the Keycloak image (manual)
 
-Only the Keycloak image is custom. You're on Apple Silicon (arm64); the
-cluster is amd64, so **`--platform linux/amd64` is mandatory** or the pod
-crash-loops with "exec format error".
+Only the Keycloak image is custom. Build it on an **amd64 host** (the cluster is
+amd64) with a plain `docker build`, then push:
 
 ```bash
 REG=harbor-registry.io.usz.ch/prj-0011608-umzhc
 TAG=$(git rev-parse --short HEAD)      # or a date/label; avoid a bare "latest" for real runs
 docker login harbor-registry.io.usz.ch
 
-docker buildx build --platform linux/amd64 \
-  --target prodimage \
-  -t "$REG/keycloak:$TAG" -t "$REG/keycloak:latest" \
-  --push keycloak
+docker build -t "$REG/keycloak:$TAG" -t "$REG/keycloak:latest" keycloak
+docker push "$REG/keycloak:$TAG"
+docker push "$REG/keycloak:latest"
 ```
+
+(On a non-amd64 build host, add `--platform=linux/amd64`; a native amd64 build
+is simplest and avoids the cross-arch pitfalls.)
 
 If you push a specific `$TAG`, set it in [`argocd/kustomization.yaml`](argocd/kustomization.yaml)'s
 `images:` block (`newTag:`) so the manifests reference exactly what you pushed.
 
-The terraform image is not built — it's the stock `hashicorp/terraform:1.9`
-pulled through Harbor's proxy cache (confirm the `newName` path in the
-`images:` block). **But see [Terraform provider fetch](#terraform-provider-fetch)
-— pulling that image is not by itself enough on a locked-down network.**
+The Job's terraform image (`tf-provider-mirror`) is built separately — see
+[Terraform provider fetch](#terraform-provider-fetch) for its `docker build` +
+push. It bakes the providers so `terraform init` runs offline.
 
 ## Step 2 — create the secrets (plain phase)
 
 See [`argocd/secrets/README.md`](argocd/secrets/README.md). Summary:
 
 ```bash
-NS=umzhc-auth-test
+NS=auth
 kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl -n "$NS" create secret docker-registry regcred \
@@ -147,8 +147,8 @@ kubectl apply -f argocd-usz/argocd/keycloak-config-job.yaml
 ## Step 5 — verify
 
 ```bash
-kubectl -n umzhc-auth-test rollout status deploy/keycloak
-kubectl -n umzhc-auth-test logs job/keycloak-config          # terraform apply → "Apply complete!"
+kubectl -n auth rollout status deploy/keycloak
+kubectl -n auth logs job/keycloak-config          # terraform apply → "Apply complete!"
 
 # From outside, via the external host that forwards to the internal ingress:
 curl -s https://auth-test.umzhconnect.ch/realms/umzh-connect/.well-known/openid-configuration | jq .issuer
@@ -198,7 +198,7 @@ runtime needs none. Rebuild **only** when the providers in the lock file change.
    ```
 2. Build (context = repo root):
    ```bash
-   docker build --platform=linux/amd64 -f tf-provider-mirror/Dockerfile \
+   docker build -f tf-provider-mirror/Dockerfile \
      -t harbor-registry.io.usz.ch/prj-0011608-umzhc/tf-provider-mirror:1.9-mirror .
    ```
 3. Verify it's offline (expect `keycloak/keycloak/5.8.0` + `hashicorp/vault/4.8.0`):

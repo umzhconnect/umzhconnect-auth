@@ -4,7 +4,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: umzhc-auth
+  name: auth
   namespace: argocd
 spec:
   project: default
@@ -14,7 +14,7 @@ spec:
     path: argocd-usz/argocd
   destination:
     server: https://kubernetes.default.svc
-    namespace: umzhc-auth
+    namespace: auth
   syncPolicy:
     automated:
       prune: true

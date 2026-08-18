@@ -12,7 +12,7 @@ plain-secret phase so real credentials never get committed to git:
 ## Phase 1 — plain secrets (create imperatively, do NOT commit real values)
 
 ```bash
-NS=umzhc-auth-test
+NS=auth
 kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
 
 # 1. Harbor image-pull secret
@@ -41,7 +41,7 @@ Once the sealed-secrets controller is installed in the cluster:
 
 ```bash
 # Seal each plain secret (pipe the imperative output through kubeseal).
-kubectl -n umzhc-auth-test create secret generic keycloak-db \
+kubectl -n auth create secret generic keycloak-db \
   --from-literal=username='<db-user>' --from-literal=password='<db-password>' \
   --dry-run=client -o yaml \
   | kubeseal --format yaml --controller-namespace sealed-secrets \

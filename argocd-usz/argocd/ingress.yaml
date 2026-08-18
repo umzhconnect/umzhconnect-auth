@@ -14,7 +14,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: keycloak
-  namespace: umzhc-auth
+  namespace: auth
   annotations:
     # Internal cluster ACME issuer that can issue for *.dev.umzhc.io.usz.ch.
     cert-manager.io/cluster-issuer: clusterissuer-acme-nginx

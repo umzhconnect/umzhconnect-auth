@@ -16,7 +16,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: tf-workspace
-  namespace: umzhc-auth
+  namespace: auth
   annotations:
     argocd.argoproj.io/sync-wave: '1'
 spec:
@@ -32,7 +32,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: keycloak-config
-  namespace: umzhc-auth
+  namespace: auth
   annotations:
     argocd.argoproj.io/hook: PostSync
     # BeforeHookCreation clears the previous Job before a new sync's Job is
