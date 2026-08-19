@@ -1,0 +1,2 @@
+# Drop your corporate MITM proxy CA PEM(s) here (e.g. fproxy-usz-ch.crt) before
+# building tf-provider-mirror if the proxy inspects TLS. Otherwise leave empty.
