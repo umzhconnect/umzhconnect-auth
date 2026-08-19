@@ -76,7 +76,7 @@ services:
   # running Keycloak. State is written to ./terraform (gitignored).
   # Re-run after config changes with:  docker compose up keycloak-config
   keycloak-config:
-    image: hashicorp/terraform:1.9
+    image: hashicorp/terraform:1.15
     container_name: umzh-auth-keycloak-config
     # Mount the Terraform module and the config it reads as siblings, matching
     # the module's ${path.module}/../config assumption (keycloak-config/ and terraform/

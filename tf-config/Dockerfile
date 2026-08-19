@@ -3,6 +3,6 @@
 # files. Baked-in files land under /src; the Job copies them onto its
 # tfstate-persisting PVC before running terraform, so this image can be
 # treated as read-only/immutable at every sync.
-FROM hashicorp/terraform:1.9
+FROM hashicorp/terraform:1.15
 COPY terraform /src/terraform
 COPY keycloak-config /src/keycloak-config
