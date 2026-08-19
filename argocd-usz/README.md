@@ -36,14 +36,14 @@ Two images, both **rarely** built (never on client/scope changes):
 | Image | Source | Rebuilt when | Notes |
 |---|---|---|---|
 | `…/keycloak` | `keycloak/` (repo) | KC upgrade / mapper change (rare) | Carries the FhirContextMapper — unavoidable custom build |
-| `…/tf-provider-mirror` | `tf-provider-mirror/` (repo) | provider bump in `terraform/.terraform.lock.hcl` (rare) | `terraform:1.9` with the keycloak + vault providers baked in as a filesystem mirror, so the config Job's `terraform init` runs **offline**. See [Terraform provider fetch](#terraform-provider-fetch) |
+| `…/tf-provider-mirror` | `tf-provider-mirror/` (repo) | provider bump in `terraform/.terraform.lock.hcl` (rare) | `terraform:1.15` with the keycloak + vault providers baked in as a filesystem mirror, so the config Job's `terraform init` runs **offline**. See [Terraform provider fetch](#terraform-provider-fetch) |
 
 Client/scope changes and `.tf` changes ship as ConfigMaps (a `git` commit) —
 **no image build**.
 
 > **Egress alternative:** on a network that *does* allow `registry.terraform.io`,
 > skip `tf-provider-mirror` and point the Job's terraform image back at the stock
-> `hashicorp/terraform:1.9` (via Harbor's Docker Hub proxy cache) in
+> `hashicorp/terraform:1.15` (via Harbor's Docker Hub proxy cache) in
 > `kustomization.yaml`'s `images:` block.
 
 ## Layout
@@ -199,24 +199,24 @@ runtime needs none. Rebuild **only** when the providers in the lock file change.
 2. Build (context = repo root):
    ```bash
    docker build -f tf-provider-mirror/Dockerfile \
-     -t harbor-registry.io.usz.ch/prj-0011608-umzhc/tf-provider-mirror:1.9-mirror .
+     -t harbor-registry.io.usz.ch/prj-0011608-umzhc/tf-provider-mirror:1.15-mirror .
    ```
 3. Verify it's offline (expect `keycloak/keycloak/5.8.0` + `hashicorp/vault/4.8.0`):
    ```bash
    docker run --rm --network none --entrypoint sh \
-     harbor-registry.io.usz.ch/prj-0011608-umzhc/tf-provider-mirror:1.9-mirror \
+     harbor-registry.io.usz.ch/prj-0011608-umzhc/tf-provider-mirror:1.15-mirror \
      -c 'ls /providers/registry.terraform.io/*/*'
    ```
 4. Push (and set the matching `newTag` in `kustomization.yaml`'s `images:` block):
    ```bash
-   docker push harbor-registry.io.usz.ch/prj-0011608-umzhc/tf-provider-mirror:1.9-mirror
+   docker push harbor-registry.io.usz.ch/prj-0011608-umzhc/tf-provider-mirror:1.15-mirror
    ```
 
 If `terraform init` ever reports a checksum mismatch, run `terraform providers
 lock -platform=linux_amd64`, commit the refreshed lock, and rebuild the mirror.
 
 ### Alternatives (instead of the mirror image)
-- **Allow egress** to `registry.terraform.io` (+ provider download hosts), and point the Job's terraform image back at the stock `hashicorp/terraform:1.9` via Harbor's proxy cache.
+- **Allow egress** to `registry.terraform.io` (+ provider download hosts), and point the Job's terraform image back at the stock `hashicorp/terraform:1.15` via Harbor's proxy cache.
 - **Internal Terraform provider mirror** (network-mirror protocol) — needs a registry that speaks it (Artifactory does; plain Harbor does not).
 
 (The `vault` provider is only used by the deferred production Vault path; drop

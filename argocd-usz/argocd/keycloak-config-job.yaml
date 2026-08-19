@@ -58,7 +58,7 @@ spec:
           # NOT enough on a locked-down network — `terraform init` also fetches
           # the keycloak + vault providers from registry.terraform.io. See
           # README.md ("Terraform provider fetch").
-          image: hashicorp/terraform:1.9
+          image: hashicorp/terraform:1.15
           imagePullPolicy: IfNotPresent
           workingDir: /workspace/terraform
           securityContext:
