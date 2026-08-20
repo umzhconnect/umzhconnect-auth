@@ -36,7 +36,8 @@ configMapGenerator:
   # 1 costs vs a globbed clone — see README "Migration to Approach 4").
   - name: kc-clients
     files:
-      - keycloak-config/clients/example_client-l2.yaml
+      - keycloak-config/clients/usz.yaml
+      - keycloak-config/clients/balgrist.yaml
 
 # Secrets are intentionally NOT listed here during the "plain secrets" phase:
 # create them out-of-band (see secrets/README.md) so real credentials never

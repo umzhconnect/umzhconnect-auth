@@ -1,9 +1,0 @@
-# Example L2 client for the USZ test realm. Replace with real client(s).
-# Terraform reads auth_level from the content (not the filename) to decide
-# what to create. There is no implicit access — no file, no client.
-client_id: "example_client-l2"
-client_name: "Example Client"
-organization_reference: "https://fhir.example-client.example/fhir/Organization/ExampleClient"
-fhir_url: "https://fhir.example-client.example/fhir"
-jwks_url: "https://jwks.example-client.example/.well-known/jwks.json"
-auth_level: "L2"
