@@ -20,9 +20,12 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: '1'
 spec:
-  # Replace with a StorageClass that exists in the cluster if "default" is
-  # not defined (kubectl get storageclass).
-  storageClassName: default
+  # StorageClass that exists in the USZ cluster (kubectl get storageclass).
+  # NOTE: storageClassName is IMMUTABLE once the PVC is bound — it must match
+  # the live PVC's class or ArgoCD's apply fails and blocks the whole sync.
+  # If you change this, delete+recreate the PVC (loses terraform.tfstate; the
+  # PostSync Job rebuilds it via terraform apply).
+  storageClassName: usz-spol-ecp-sv01-vsan-pftt-r1-sfft-r5
   accessModes: ['ReadWriteOnce']
   resources:
     requests:

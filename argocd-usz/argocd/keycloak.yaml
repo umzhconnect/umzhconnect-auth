@@ -57,10 +57,14 @@ spec:
             - name: KC_DB
               value: postgres
             # External MANAGED Postgres. Replace REPLACE_MANAGED_DB_HOST (and
-            # db name / sslmode if different). Host/port/db are not secret;
-            # only the username/password live in the keycloak-db Secret below.
+            # db name if different). Host/port/db are not secret; only the
+            # username/password live in the keycloak-db Secret below.
+            # sslmode=disable: this managed DB does not offer TLS on the wire,
+            # so we disable it explicitly (the pg driver's default `prefer`
+            # still negotiates SSL first, which this DB rejects). Flip to
+            # `require`/`verify-full` once the DB terminates TLS.
             - name: KC_DB_URL
-              value: jdbc:postgresql://REPLACE_MANAGED_DB_HOST:5432/keycloak?sslmode=require
+              value: jdbc:postgresql://REPLACE_MANAGED_DB_HOST:5432/umzh_keycloak?sslmode=disable
             - name: KC_DB_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -91,6 +95,13 @@ spec:
               value: 'https://auth-test.umzhconnect.ch'
             - name: KC_HOSTNAME_STRICT
               value: 'false'
+            # Admin console served under the INTERNAL ingress host, decoupled
+            # from the public frontend (KC_HOSTNAME). Clients still get the
+            # external issuer, but the admin console's OIDC login + assets
+            # resolve to auth.dev.umzhc.io.usz.ch, so it works when reached via
+            # the internal ingress (and is not exposed under the public name).
+            - name: KC_HOSTNAME_ADMIN
+              value: 'https://auth.dev.umzhc.io.usz.ch'
             # In-cluster callers (the config Job) reach keycloak:8080 for the
             # backchannel while the published issuer stays the public host.
             - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
