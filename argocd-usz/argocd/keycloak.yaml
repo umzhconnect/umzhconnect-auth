@@ -102,15 +102,30 @@ spec:
             # the internal ingress (and is not exposed under the public name).
             - name: KC_HOSTNAME_ADMIN
               value: 'https://auth.dev.umzhc.io.usz.ch'
-            # In-cluster callers (the config Job) reach keycloak:8080 for the
-            # backchannel while the published issuer stays the public host.
+            # Keep the backchannel URLs (token, jwks, introspection, userinfo
+            # in the .well-known doc) fixed to KC_HOSTNAME instead of resolving
+            # them from the request Host. With "true", fetching discovery via
+            # the internal ingress returned those endpoints on the internal
+            # host; "false" pins them all to auth-test.umzhconnect.ch. This does
+            # not affect the config Job, which uses the admin REST API directly
+            # (TF_VAR_keycloak_url=http://keycloak:8080), independent of these.
             - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
-              value: 'true'
+              value: 'false'
+            # Trust the internal USZ PKI for OUTBOUND TLS (the client JWKS
+            # fetch over https to *.dev.umzhc.io.usz.ch). Every cert under this
+            # dir is merged into the truststore, on top of the JVM defaults, so
+            # public CAs still validate. The USZ Root CA 2 PEM is delivered via
+            # the kc-truststore ConfigMap (see kustomization.yaml).
+            - name: KC_TRUSTSTORE_PATHS
+              value: '/opt/keycloak/conf/truststores'
           volumeMounts:
             - name: tmp
               mountPath: /tmp
             - name: cache
               mountPath: /opt/keycloak/data
+            - name: truststore
+              mountPath: /opt/keycloak/conf/truststores
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /health/ready
@@ -136,6 +151,11 @@ spec:
           emptyDir: {}
         - name: cache
           emptyDir: {}
+        # kustomize rewrites this to the hashed name (kc-truststore-xxxx), so
+        # updating the CA rolls the pod and reloads the truststore.
+        - name: truststore
+          configMap:
+            name: kc-truststore
 ---
 apiVersion: v1
 kind: Service

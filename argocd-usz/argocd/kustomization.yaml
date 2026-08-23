@@ -31,6 +31,11 @@ configMapGenerator:
   - name: kc-scopes
     files:
       - keycloak-config/scopes.yaml
+  # Internal USZ root CA, so Keycloak trusts the HTTPS JWKS endpoint at
+  # *.dev.umzhc.io.usz.ch (mounted at KC_TRUSTSTORE_PATHS in keycloak.yaml).
+  - name: kc-truststore
+    files:
+      - truststore/usz-root-ca.crt
   # One entry PER CLIENT. Adding a client = drop a file in
   # keycloak-config/clients/ and add its path here (the one extra edit Approach
   # 1 costs vs a globbed clone — see README "Migration to Approach 4").
