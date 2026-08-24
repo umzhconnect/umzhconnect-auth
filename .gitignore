@@ -14,3 +14,7 @@ target/
 # OS
 .DS_Store
 dev.bru
+
+# Corporate CA(s) dropped in for the provider-mirror build (env-specific)
+tf-provider-mirror/certs/*.crt
+tf-provider-mirror/certs/*.pem

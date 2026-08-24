@@ -65,7 +65,7 @@ So instead of the gitops repo generating ConfigMaps from this repo's raw
 images** and the gitops repo's manifests reference them by tag — exactly
 like `keycloak`/`token-validator` already were:
 
-- **`tf-config`** (`tf-config/Dockerfile`, `FROM hashicorp/terraform:1.9`) —
+- **`tf-config`** (`tf-config/Dockerfile`, `FROM hashicorp/terraform:1.15`) —
   `COPY terraform /src/terraform`, `COPY keycloak-config /src/keycloak-config`.
   The `keycloak-config` Job copies `/src/*` onto its `tf-workspace` PVC before
   running `terraform apply`, so `terraform.tfstate` still persists across Job
