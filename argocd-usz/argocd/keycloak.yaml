@@ -1,0 +1,188 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: auth
+  labels:
+    app.kubernetes.io/name: keycloak
+spec:
+  replicas: 1
+  revisionHistoryLimit: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak
+    spec:
+      imagePullSecrets:
+        - name: regcred
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: keycloak
+          image: harbor-registry.io.usz.ch/prj-0011608-umzhc/keycloak:latest
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          # start-dev matches the existing dev deployment. For a hardened
+          # production service, switch to ["start", "--optimized"] and set
+          # KC_HOSTNAME_STRICT=true.
+          args: ['start-dev']
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 9000
+          env:
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: admin-username
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: admin-password
+            - name: KC_DB
+              value: postgres
+            # External MANAGED Postgres. Replace REPLACE_MANAGED_DB_HOST (and
+            # db name if different). Host/port/db are not secret; only the
+            # username/password live in the keycloak-db Secret below.
+            # sslmode=disable: this managed DB does not offer TLS on the wire,
+            # so we disable it explicitly (the pg driver's default `prefer`
+            # still negotiates SSL first, which this DB rejects). Flip to
+            # `require`/`verify-full` once the DB terminates TLS.
+            - name: KC_DB_URL
+              value: jdbc:postgresql://REPLACE_MANAGED_DB_HOST:5432/umzh_keycloak?sslmode=disable
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-db
+                  key: username
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-db
+                  key: password
+            - name: KC_HEALTH_ENABLED
+              value: 'true'
+            - name: KC_HTTP_PORT
+              value: '8080'
+            # TLS is terminated at the nginx Ingress; Keycloak serves HTTP
+            # in-cluster and trusts X-Forwarded-* headers from the ingress.
+            - name: KC_HTTP_ENABLED
+              value: 'true'
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
+            # Published issuer seen in token iss/aud = the EXTERNAL host that
+            # clients use. Deliberately NOT the Ingress host: the external name
+            # auth-test.umzhconnect.ch is exposed outward and forwarded to the
+            # internal ingress host (auth.dev.umzhc.io.usz.ch). Fixed here so
+            # the issuer stays the external name regardless of the Host header
+            # forwarded inward. Must match TF_VAR_keycloak_public_url in the Job.
+            - name: KC_HOSTNAME
+              value: 'https://auth-test.umzhconnect.ch'
+            - name: KC_HOSTNAME_STRICT
+              value: 'false'
+            # Admin console served under the INTERNAL ingress host, decoupled
+            # from the public frontend (KC_HOSTNAME). Clients still get the
+            # external issuer, but the admin console's OIDC login + assets
+            # resolve to auth.dev.umzhc.io.usz.ch, so it works when reached via
+            # the internal ingress (and is not exposed under the public name).
+            - name: KC_HOSTNAME_ADMIN
+              value: 'https://auth.dev.umzhc.io.usz.ch'
+            # Keep the backchannel URLs (token, jwks, introspection, userinfo
+            # in the .well-known doc) fixed to KC_HOSTNAME instead of resolving
+            # them from the request Host. With "true", fetching discovery via
+            # the internal ingress returned those endpoints on the internal
+            # host; "false" pins them all to auth-test.umzhconnect.ch. This does
+            # not affect the config Job, which uses the admin REST API directly
+            # (TF_VAR_keycloak_url=http://keycloak:8080), independent of these.
+            - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
+              value: 'false'
+            # Trust the internal USZ PKI for OUTBOUND TLS (the client JWKS
+            # fetch over https to *.dev.umzhc.io.usz.ch). Every cert under this
+            # dir is merged into the truststore, on top of the JVM defaults, so
+            # public CAs still validate. The USZ Root CA 2 PEM is delivered via
+            # the kc-truststore ConfigMap (see kustomization.yaml).
+            - name: KC_TRUSTSTORE_PATHS
+              value: '/opt/keycloak/conf/truststores'
+            # OUTBOUND HTTP proxy for Keycloak's client JWKS fetches. Mappings
+            # are evaluated IN ORDER, first match wins:
+            # <hostname-regex>;<proxy-uri|NO_PROXY>.
+            #   1. in-cluster ClusterIP services  -> DIRECT (a proxy can't
+            #      reach *.svc.cluster.local)
+            #   2. internal USZ hosts (*.usz.ch)  -> DIRECT
+            #   3. everything else (external hospitals' public JWKS) -> proxy
+            # If proxy.usz.ch does TLS interception, add its CA under
+            # KC_TRUSTSTORE_PATHS above.
+            - name: KC_SPI_CONNECTIONS_HTTP_CLIENT_DEFAULT_PROXY_MAPPINGS
+              value: '.*\.svc\.cluster\.local;NO_PROXY,.*\.usz\.ch;NO_PROXY,.*;http://proxy.usz.ch:8080'
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /opt/keycloak/data
+            - name: truststore
+              mountPath: /opt/keycloak/conf/truststores
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: management
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: '250m'
+              memory: '768Mi'
+            limits:
+              cpu: '1'
+              memory: '1536Mi'
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: cache
+          emptyDir: {}
+        # kustomize rewrites this to the hashed name (kc-truststore-xxxx), so
+        # updating the CA rolls the pod and reloads the truststore.
+        - name: truststore
+          configMap:
+            name: kc-truststore
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: auth
+  labels:
+    app.kubernetes.io/name: keycloak
+spec:
+  selector:
+    app.kubernetes.io/name: keycloak
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+    - name: management
+      port: 9000
+      targetPort: management

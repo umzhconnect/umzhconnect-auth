@@ -1,0 +1,67 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: auth
+
+resources:
+  - ns.yaml
+  - keycloak.yaml
+  - keycloak-config-job.yaml
+  - ingress.yaml
+
+# --- Approach 1: config delivered as ConfigMaps (no configurator image) ------
+# The Terraform module and the client/scope YAML are generated into ConfigMaps
+# and mounted into the keycloak-config Job. Kustomize appends a content hash to
+# each name, so editing any file rolls the Job and re-applies. Kept as three
+# ConfigMaps so the Job can reconstruct the terraform/ + keycloak-config/{scopes,clients}
+# layout the module expects.
+configMapGenerator:
+  # Terraform module — a COPY of ../../terraform (kustomize can't read
+  # files outside its root, so it lives in-tree here). Re-sync when the module
+  # changes:  cp terraform/*.tf terraform/.terraform.lock.hcl argocd-usz/argocd/terraform/
+  - name: kc-terraform
+    files:
+      - terraform/clients.tf
+      - terraform/realm.tf
+      - terraform/scopes.tf
+      - terraform/variables.tf
+      - terraform/versions.tf
+      - terraform/outputs.tf
+      - terraform/.terraform.lock.hcl
+  # Realm scope vocabulary.
+  - name: kc-scopes
+    files:
+      - keycloak-config/scopes.yaml
+  # Internal USZ root CA, so Keycloak trusts the HTTPS JWKS endpoint at
+  # *.dev.umzhc.io.usz.ch (mounted at KC_TRUSTSTORE_PATHS in keycloak.yaml).
+  - name: kc-truststore
+    files:
+      - truststore/usz-root-ca.crt
+  # One entry PER CLIENT. Adding a client = drop a file in
+  # keycloak-config/clients/ and add its path here (the one extra edit Approach
+  # 1 costs vs a globbed clone — see README "Migration to Approach 4").
+  - name: kc-clients
+    files:
+      - keycloak-config/clients/usz.yaml
+      - keycloak-config/clients/balgrist.yaml
+
+# Secrets are intentionally NOT listed here during the "plain secrets" phase:
+# create them out-of-band (see secrets/README.md) so real credentials never
+# land in git. When you move to sealed-secrets, kubeseal each plain Secret
+# into a SealedSecret manifest (safe to commit) and add them here:
+#   - secrets/regcred.sealed.yaml
+#   - secrets/keycloak-admin.sealed.yaml
+#   - secrets/keycloak-db.sealed.yaml
+
+images:
+  # Your custom Keycloak image (manual push → set the tag you pushed).
+  - name: harbor-registry.io.usz.ch/prj-0011608-umzhc/keycloak
+    newTag: a18c693
+  # Terraform image for the keycloak-config Job. Points at tf-provider-mirror
+  # (built from tf-provider-mirror/Dockerfile) — a terraform:1.15 image with the
+  # keycloak + vault providers baked in as a filesystem mirror, so `terraform
+  # init` runs offline and never fetches from registry.terraform.io. Set newTag
+  # to the tag you push. (For a network WITH terraform-registry egress you can
+  # instead point this back at the stock hashicorp/terraform via the proxy cache.)
+  - name: hashicorp/terraform
+    newName: harbor-registry.io.usz.ch/prj-0011608-umzhc/tf-provider-mirror
+    newTag: '1.15-mirror'
