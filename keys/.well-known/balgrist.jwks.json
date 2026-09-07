@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "use": "sig",
+      "kty": "RSA",
+      "kid": "l2-signing-ukb-test-20260904",
+      "alg": "RS256",
+      "n": "2SWuxuIQ821dB3Dsvex0iL1_AldjmBeuWz52ffA6ovxihlx6_RLelWdWP8zuwHSLmLERi_gsU0t3W_nwEGTbyweYNTI3a8igTOvRDS7XafXUChxRHU5kf4ZpVY6wXe_l_GCjXnE7trXC5nkTgS6VvTd6Jvqus7bN62XUmD7t5UlDecF5vWuM6oIuvWezRnT7F57PhSK90kODURw1FzwXIzIHLhOwUoHxOBYasUiT7Ke50RpgFRj-iKRtGzFy4dg83Xlttao6TNb3C_DOyIZUblsJnFMqwkjOLmYKM-AALCGYkJj-4UihAkHTlaLdRgbbkeXChLqjD_1ZPzVpWR_elQ",
+      "e": "AQAB"
+    }
+  ]
+}
