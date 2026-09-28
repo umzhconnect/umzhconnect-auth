@@ -21,9 +21,9 @@ below for how this is meant to evolve.
 | Registry | Harbor: `harbor-registry.io.usz.ch/prj-0011608-umzhc` |
 | Config delivery | **Approach 1** — `.tf` + client/scope YAML via `configMapGenerator`, run on the stock terraform image (no `configurator`/`tf-config` image) |
 | Image delivery | **Manual push** (no CI yet) — build `linux/amd64`, push by hand |
-| External host (clients / issuer) | `https://auth-test.umzhconnect.ch` — exposed outward, appears in token `iss`/`aud` (`KC_HOSTNAME`) |
-| Internal host (ingress) | `auth.dev.umzhc.io.usz.ch` — what the nginx `Ingress` matches; the external host forwards here |
-| Ingress / TLS | nginx `Ingress` + cert-manager (`clusterissuer-acme-nginx`) on the internal host; cert Secret `auth.dev.umzhc.io.usz.ch-cert` |
+| External host (clients / issuer) | `https://auth-test.umzhconnect.ch` — appears in token `iss`/`aud` (`KC_HOSTNAME`). Outside the corporate network: exposed by the outer LB/proxy, which forwards to the internal host. Inside: an internal DNS record resolves it directly to the cluster ingress (firewall constraints), skipping the outer layer |
+| Internal host (ingress) | `auth.dev.umzhc.io.usz.ch` — the outer layer's forward target; also serves the admin console (`KC_HOSTNAME_ADMIN`) |
+| Ingress / TLS | One nginx `Ingress` matching **both** hosts, cert-manager (`clusterissuer-acme-nginx`) issuing a separate cert per host: Secrets `auth.dev.umzhc.io.usz.ch-cert` and `auth-test.umzhconnect.ch-cert` |
 | Database | **External managed Postgres**, creds in a plain `keycloak-db` Secret (no in-cluster DB) |
 | Secrets | Plain now (created out-of-band); migrate to sealed-secrets later |
 | Namespace | `auth` |
@@ -150,20 +150,37 @@ kubectl apply -f argocd-usz/argocd/keycloak-config-job.yaml
 kubectl -n auth rollout status deploy/keycloak
 kubectl -n auth logs job/keycloak-config          # terraform apply → "Apply complete!"
 
-# From outside, via the external host that forwards to the internal ingress:
+# Via the external name — from outside this goes through the outer layer,
+# from inside the corporate network it hits the cluster ingress directly:
 curl -s https://auth-test.umzhconnect.ch/realms/umzh-connect/.well-known/openid-configuration | jq .issuer
 # expect: https://auth-test.umzhconnect.ch/realms/umzh-connect  (external name, from KC_HOSTNAME)
+
+# Both ingress certs issued?
+kubectl -n auth get certificate,challenge
 
 # To test the ingress directly by its internal host (e.g. from in-cluster),
 # send the internal Host header to the ingress:
 # curl -s -H 'Host: auth.dev.umzhc.io.usz.ch' https://<ingress-ip>/realms/umzh-connect/.well-known/openid-configuration
 ```
 
-DNS / routing: `auth.dev.umzhc.io.usz.ch` must resolve to the nginx ingress
-controller (internal), and cert-manager must be able to issue for it. The
-**external** name `auth-test.umzhconnect.ch` is handled by the outer LB/proxy
-that forwards to that internal host — its DNS and TLS are configured there,
-not in these manifests.
+DNS / routing:
+
+- `auth.dev.umzhc.io.usz.ch` must resolve to the nginx ingress controller
+  (internal), and cert-manager must be able to issue for it.
+- `auth-test.umzhconnect.ch` has two paths:
+  - **Outside the corporate network** — public DNS points at the outer
+    LB/proxy, which forwards to the internal host. Its public TLS is
+    configured there, not in these manifests.
+  - **Inside the corporate network** — an internal DNS record resolves it
+    directly to the nginx ingress controller, so the `Ingress` also matches
+    this host and terminates TLS with its own cert
+    (`auth-test.umzhconnect.ch-cert`). `clusterissuer-acme-nginx` must be
+    allowed to issue for `umzhconnect.ch`, and HTTP-01 validation relies on
+    the ACME server resolving the name via the internal record. Internal
+    non-browser clients must trust the issuing CA (e.g. USZ Root CA).
+
+Because `KC_HOSTNAME` pins the issuer, tokens are identical whichever path a
+client takes.
 
 ## Terraform provider fetch
 

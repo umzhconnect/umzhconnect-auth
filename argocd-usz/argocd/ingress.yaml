@@ -1,22 +1,30 @@
-# Routes cluster-internal traffic to Keycloak. The Ingress matches the
-# INTERNAL host `auth.dev.umzhc.io.usz.ch` — that's the name traffic arrives
-# with at the nginx ingress controller.
+# Routes traffic to Keycloak under two hosts:
 #
-# The EXTERNAL name clients use, `auth-test.umzhconnect.ch`, is exposed
-# outward by an outer layer (external LB / reverse proxy) that forwards to
-# this internal host. That external name is what appears in token iss/aud and
-# is pinned via KC_HOSTNAME in keycloak.yaml (NOT set here) — so the issuer
-# stays the external name regardless of the Host header forwarded inward.
+#   - auth.dev.umzhc.io.usz.ch — INTERNAL host. Serves the admin console
+#     (KC_HOSTNAME_ADMIN) and is the target the outer layer forwards to.
+#   - auth-test.umzhconnect.ch — EXTERNAL name clients use. Outside the
+#     corporate network it's exposed by an outer layer (external LB / reverse
+#     proxy) that forwards inward. Inside the corporate network an internal DNS
+#     record resolves it straight to this cluster's ingress (firewall
+#     constraints), skipping the outer layer — hence the rule for it here.
 #
-# cert-manager issues the TLS cert for the internal host below; external TLS
-# for auth-test.umzhconnect.ch is handled by the outer layer.
+# The issuer in token iss/aud is always the external name, pinned via
+# KC_HOSTNAME in keycloak.yaml (NOT derived from this Ingress) — so it's the
+# same whichever path a client takes.
+#
+# cert-manager issues a cert per tls entry below, both via the same issuer.
+# The entries are kept separate so a failure issuing auth-test doesn't break
+# the internal host's cert. External TLS for auth-test.umzhconnect.ch (outside
+# the corporate network) is still handled by the outer layer.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: keycloak
   namespace: auth
   annotations:
-    # Internal cluster ACME issuer that can issue for *.dev.umzhc.io.usz.ch.
+    # Internal cluster ACME issuer. Must be able to issue for both
+    # *.dev.umzhc.io.usz.ch and auth-test.umzhconnect.ch (HTTP-01 validation
+    # of the latter relies on the internal DNS record pointing here).
     cert-manager.io/cluster-issuer: clusterissuer-acme-nginx
     # Keycloak access tokens + headers can be large; give nginx room so it
     # doesn't 502 on big upstream response headers.
@@ -27,8 +35,21 @@ spec:
     - hosts:
         - auth.dev.umzhc.io.usz.ch
       secretName: auth.dev.umzhc.io.usz.ch-cert
+    - hosts:
+        - auth-test.umzhconnect.ch
+      secretName: auth-test.umzhconnect.ch-cert
   rules:
     - host: auth.dev.umzhc.io.usz.ch
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+    - host: auth-test.umzhconnect.ch
       http:
         paths:
           - path: /

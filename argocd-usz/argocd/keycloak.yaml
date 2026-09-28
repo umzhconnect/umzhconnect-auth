@@ -86,11 +86,12 @@ spec:
             - name: KC_PROXY_HEADERS
               value: xforwarded
             # Published issuer seen in token iss/aud = the EXTERNAL host that
-            # clients use. Deliberately NOT the Ingress host: the external name
-            # auth-test.umzhconnect.ch is exposed outward and forwarded to the
-            # internal ingress host (auth.dev.umzhc.io.usz.ch). Fixed here so
-            # the issuer stays the external name regardless of the Host header
-            # forwarded inward. Must match TF_VAR_keycloak_public_url in the Job.
+            # clients use. auth-test.umzhconnect.ch reaches Keycloak either via
+            # the outer layer (forwarded to the internal ingress host
+            # auth.dev.umzhc.io.usz.ch) or, inside the corporate network,
+            # directly via the Ingress (internal DNS record). Fixed here so the
+            # issuer stays the external name regardless of the Host header that
+            # arrives. Must match TF_VAR_keycloak_public_url in the Job.
             - name: KC_HOSTNAME
               value: 'https://auth-test.umzhconnect.ch'
             - name: KC_HOSTNAME_STRICT
