@@ -118,6 +118,17 @@ spec:
             # the kc-truststore ConfigMap (see kustomization.yaml).
             - name: KC_TRUSTSTORE_PATHS
               value: '/opt/keycloak/conf/truststores'
+            # OUTBOUND HTTP proxy for Keycloak's client JWKS fetches. Mappings
+            # are evaluated IN ORDER, first match wins:
+            # <hostname-regex>;<proxy-uri|NO_PROXY>.
+            #   1. in-cluster ClusterIP services  -> DIRECT (a proxy can't
+            #      reach *.svc.cluster.local)
+            #   2. internal USZ hosts (*.usz.ch)  -> DIRECT
+            #   3. everything else (external hospitals' public JWKS) -> proxy
+            # If proxy.usz.ch does TLS interception, add its CA under
+            # KC_TRUSTSTORE_PATHS above.
+            - name: KC_SPI_CONNECTIONS_HTTP_CLIENT_DEFAULT_PROXY_MAPPINGS
+              value: '.*\.svc\.cluster\.local;NO_PROXY,.*\.usz\.ch;NO_PROXY,.*;http://proxy.usz.ch:8080'
           volumeMounts:
             - name: tmp
               mountPath: /tmp
