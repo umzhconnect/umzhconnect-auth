@@ -1,0 +1,7 @@
+# University Hospital Zurich (USZ) — L2 (private_key_jwt) M2M client.
+client_id: "cli_AQcDTg"
+client_name: "University Hospital Zurich"
+organization_reference: "https://registry-test.umzhconnect.ch/fhir/Organization/org_ua2AtJ88"
+fhir_url: "https://api-int.usz.ch/clinical-orders/v1/fhir"
+jwks_url: "https://api-int.usz.ch/clinical-orders/v1/.well-known/jwks.json"
+auth_level: "L2"

@@ -1,0 +1,23 @@
+# Example ArgoCD Application. Place this in whatever repo/app-of-apps your
+# ArgoCD watches (not necessarily this repo). Replace repoURL / targetRevision
+# with wherever these manifests live, and confirm the ArgoCD project name.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: auth
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://REPLACE_GIT_HOST/umzhconnect-auth.git
+    targetRevision: main
+    path: argocd-usz/argocd
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: auth
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
