@@ -1,13 +1,13 @@
 docs {
   UMZH Connect Auth Server — Bruno collection.
   
-  Exercises the realm from a caller's perspective: acquiring tokens (L2 `private_key_jwt`, with and without RFC 9396 FHIR context), presenting them to a mock resource server (token-validator), and confirming that rejected/edge-case requests behave the way the IG and the relevant RFCs require.
+  Exercises the realm from a caller's perspective: acquiring tokens (L2 `private_key_jwt`, with and without an RFC 9396 `authorization_details` context), presenting them to a mock resource server (token-validator), and confirming that rejected/edge-case requests behave the way the IG and the relevant RFCs require.
   
   | Folder | Requests |
   |--------|----------|
   | `auth/` | Discovery, JWKS, L2 tokens (placer/fulfiller), context tokens (placer+fulfiller with `authorization_details`) |
-  | `validation/` | Health check, validate token, mock FHIR endpoints, context token claims inspection |
-  | `negative/` | Wrong secret, garbage token, missing scope, context gate without context, expired assertion, wrong assertion `aud`, unknown `authorization_details` type, unsupported grant type |
+  | `validation/` | Health check, validate token, mock FHIR endpoints (context-gated reads in both directions, Task create/read), context token claims inspection |
+  | `negative/` | Wrong secret, garbage token, missing scope, context gate without context, expired assertion, wrong assertion `aud`, invalid `authorization_details` (unknown type, two contexts, malformed JSON, missing identifier), unsupported grant type, unreachable JWKS, resource outside the context graph, foreign context, foreign Task requester |
   
   Suggested order: `auth/` → `validation/` → `negative/`. See each folder's own docs (folder settings → Docs) and each request's docs block for specifics.
   
@@ -17,7 +17,7 @@ docs {
   |------|---------------|
   | `01-discovery.bru` | OIDC discovery endpoint |
   | `02-jwks.bru` | AS public key set |
-  | `05-get-placer-token-context.bru` | Placer L2 + RFC 9396 `authorization_details` → `fhirContext` |
+  | `05-get-placer-token-context.bru` | Placer L2 + `authorization_details` (Task context) → `authorization_details` claim and token response |
   | `06-get-placer-token-l2.bru` | Placer L2 token request |
   | `07-get-fulfiller-token-l2.bru` | Fulfiller L2 token request |
   | `08-get-fulfiller-token-context.bru` | Canonical IG example: fulfiller L2 + `authorization_details` |
@@ -29,11 +29,19 @@ docs {
   | `01-wrong-secret.bru` | `client_secret` against L2 client → 400 |
   | `02-validate-garbage-token.bru` | Malformed token at `/validate` → 422 |
   | `03-missing-scope.bru` | Resource read rejected when the token didn't request the resource's scope → 403 |
-  | `04-context-gate-without-context.bru` | L2 token without `fhirContext` → 403 on context-gated resource |
+  | `04-context-gate-without-context.bru` | L2 token without a context → 403 on context-gated resource |
   | `06-expired-client-assertion.bru` | Client assertion with `exp` in the past → 400 (RFC 7523 §3) |
   | `07-wrong-assertion-aud.bru` | Client assertion `aud` pointing to wrong endpoint → 400 |
-  | `08-unknown-context-type.bru` | `authorization_details` with unknown type → token issued, no `fhirContext` |
+  | `08-unknown-context-type.bru` | `authorization_details` with unknown type → 400 `invalid_authorization_details` (RFC 9396 §5) |
   | `09-unsupported-grant-type.bru` | `authorization_code` grant (IG is M2M only) → 400 |
+  | `10-unreachable-jwks-hospital-c.bru` | Onboarded client whose `jwks_url` is unreachable → 400 |
+  | `11-two-contexts.bru` | Two contexts in one token request → 400 `invalid_authorization_details` |
+  | `12-malformed-authorization-details.bru` | `authorization_details` not valid JSON → 400 |
+  | `13-missing-identifier.bru` | Context without `identifier` → 400 |
+  | `14-read-outside-context-graph.bru` | Resource not in the context graph → 403 |
+  | `15-get-token-foreign-context.bru` | Setup: AS issues a token for a context the caller is not party to → 200 |
+  | `16-read-with-foreign-context.bru` | Caller is not the recorded counter-party → 403 |
+  | `17-create-task-foreign-requester.bru` | `Task.requester` is not the caller → 403 |
 
   ## Notes
   

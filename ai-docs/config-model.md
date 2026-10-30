@@ -74,7 +74,7 @@ Key points:
 - `auth_level` must be `"L1"` — this is what routes the file into `local.clients_l1_all`/`local.clients_l1` rather than `local.clients_l2`; the same `terraform_data.client_config_guard` enforcement applies repo-wide (see the directory layout section above).
 - No audit-metadata fields (`reason`/`requested_by`/`requested_date` from an earlier revision of this schema have been dropped).
 - `enabled` (optional, defaults to `true`) works the same as on L2 files — see the L2 field table above. For L1 in particular this preserves the Keycloak-generated `client_secret` across a temporary disable, where deleting the file would destroy it.
-- Terraform creates `{client_id}` with the same mapper set as an L2 client (`client-id-mapper`, `org-reference-mapper`, `fhir-context-mapper`, `ecosystem-audience-mapper`, `auth-level-mapper`) so resource servers can distinguish them via the `auth_level` claim.
+- Terraform creates `{client_id}` with the same mapper set as an L2 client (`client-id-mapper`, `org-reference-mapper`, `context-mapper`, `ecosystem-audience-mapper`, `auth-level-mapper`) so resource servers can distinguish them via the `auth_level` claim.
 - Secret handling is deliberately relaxed relative to real production secrets — see ADR 0004.
 - Revoke the same way as a hospital: delete the file, `terraform apply`.
 

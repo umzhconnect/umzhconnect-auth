@@ -26,8 +26,12 @@ const ALLOWED_ALGS = ['RS256', 'ES256'];
 /** SMART access tokens per the IG should be short-lived (~5 minutes). */
 const MAX_LIFETIME_SECONDS = 360;
 
-export interface FhirContextEntry {
-  reference?: string;
+/** RFC 9396 authorization_details type of the UMZH Connect context. */
+export const CONTEXT_TYPE = 'http://fhir.ch/ig/ch-umzh-connect/context';
+
+export interface ContextEntry {
+  type: string;
+  identifier?: string;
 }
 
 export function scopesOf(claims: JWTPayload): string[] {
@@ -45,8 +49,16 @@ export function hasSystemScope(claims: JWTPayload, resource: string, perm: strin
   });
 }
 
-export function fhirContextOf(claims: JWTPayload): FhirContextEntry[] {
-  return Array.isArray(claims.fhirContext) ? (claims.fhirContext as FhirContextEntry[]) : [];
+/**
+ * The UMZH Connect contexts in the token's `authorization_details` claim.
+ * Entries of other types are ignored (IG: Counter-party entitlement, step 1).
+ */
+export function contextsOf(claims: JWTPayload): ContextEntry[] {
+  const details = claims.authorization_details;
+  if (!Array.isArray(details)) return [];
+  return details.filter(
+    (d): d is ContextEntry => typeof d === 'object' && d !== null && d.type === CONTEXT_TYPE,
+  );
 }
 
 export function organizationReferenceOf(claims: JWTPayload): string | undefined {
@@ -144,17 +156,19 @@ export async function validateToken(token: string, config: Config): Promise<Vali
     detail: orgRef ?? 'extensions.umzhconnect.organization_reference missing',
   });
 
-  // fhirContext (RFC 9396 authorization_details -> workflow context binding).
-  // Optional at token level: tokens without context can only reach
-  // non-context-gated resources.
-  const context = fhirContextOf(claims);
+  // Context (RFC 9396 authorization_details claim, IG: at most one per token).
+  // Optional at token level: tokens without context can only reach Task and
+  // Questionnaire, the resources that are not context-gated.
+  const contexts = contextsOf(claims);
   checks.push({
-    name: 'fhirContext',
-    status: context.length > 0 ? 'pass' : 'skipped',
+    name: 'context',
+    status: contexts.length === 0 ? 'skipped' : contexts.length === 1 ? 'pass' : 'fail',
     detail:
-      context.length > 0
-        ? `context roots: ${context.map((c) => c.reference).join(', ')}`
-        : 'no fhirContext claim (token not bound to a workflow context)',
+      contexts.length === 0
+        ? 'no context in authorization_details (token not bound to a workflow root)'
+        : contexts.length === 1
+          ? `context root: ${contexts[0].identifier}`
+          : `${contexts.length} contexts; the IG allows at most one per token`,
   });
 
   // realm_roles (sandbox parity: placer | fulfiller drives gateway routing)

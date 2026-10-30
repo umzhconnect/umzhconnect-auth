@@ -61,23 +61,26 @@ Bruno: `auth/06-get-placer-token-l2.bru`, `auth/07-get-fulfiller-token-l2.bru`.
 
 ---
 
-### UC-T2 — Token with FHIR context
+### UC-T2 — Token with context
 
-The app declares which FHIR resource it is operating on, and the AS embeds a
-`fhirContext` claim in the token.
+The app names the workflow root it is operating in, and the AS embeds it as a
+top-level `authorization_details` claim in the token and returns it in the
+token response (RFC 9396 §7, §9.1).
 
 **Actor:** hospital application
 **Additional request parameter (RFC 9396):**
 ```
-authorization_details=[{"type":"umzh-connect-context","identifier":"ServiceRequest/sr-123"}]
+authorization_details=[{"type":"http://fhir.ch/ig/ch-umzh-connect/context","identifier":"ServiceRequest/sr-123"}]
 ```
-**Expected additional token claim:**
+**Expected additional token claim (and token response field):**
 ```json
-"fhirContext": [{"reference": "ServiceRequest/sr-123"}]
+"authorization_details": [{"type": "http://fhir.ch/ig/ch-umzh-connect/context", "identifier": "ServiceRequest/sr-123"}]
 ```
-The `FhirContextMapper` reads the raw request parameter directly (not via
-Keycloak's `AuthorizationRequestContext`, which is not populated for
-`client_credentials` with custom `authorization_details` types on KC 26.x).
+At most one context per request. The `ContextMapper` reads the raw request
+parameter directly (not via Keycloak's `AuthorizationRequestContext`, which is
+not populated for `client_credentials` with custom `authorization_details`
+types on KC 26.x). Invalid requests are rejected — see
+[UC-S3](#uc-s3--invalid-authorization_details).
 
 Bruno: `auth/05-get-placer-token-context.bru`, `auth/08-get-fulfiller-token-context.bru`.
 
@@ -87,9 +90,10 @@ Bruno: `auth/05-get-placer-token-context.bru`, `auth/08-get-fulfiller-token-cont
 
 The app requests a token with no context parameter.
 
-**Expected behavior:** token is issued without a `fhirContext` claim. Absence
-of the claim is a valid state, not an error — but context-gated resources will
-return 403 to such a token ([UC-R4](#uc-r4--rs-enforces-fhircontext)).
+**Expected behavior:** token is issued without an `authorization_details`
+claim. Absence of the claim is a valid state, not an error: `Task` and
+`Questionnaire` need no context. Every other resource type is context-gated
+and returns 403 to such a token ([UC-R4](#uc-r4--rs-enforces-the-context)).
 
 ---
 
@@ -181,7 +185,7 @@ grant_type=client_credentials
 | payload | `client_id` | the L1 file's `client_id` (convention: `{hospital_name}-l1`) |
 | payload | `extensions.umzhconnect.auth_level` | **`"L1"`** — the signal resource servers use to identify this as a debug token and, if they choose to, reject it for production/clinical data flows ([UC-R6](#uc-r6--rs-enforces-a-minimum-auth_level)) |
 
-`authorization_details` (FHIR context, [UC-T2](#uc-t2--token-with-fhir-context))
+`authorization_details` (context, [UC-T2](#uc-t2--token-with-context))
 works identically on the L1 client — the mapper set is the same as L2's.
 
 **Expected behavior when no L1 file exists for the hospital:** same as
@@ -229,17 +233,23 @@ Note the limits: since every hospital client can request the same scopes
 
 ---
 
-### UC-R4 — RS enforces `fhirContext`
+### UC-R4 — RS enforces the context
 
-Context-gate enforcement: access to a specific FHIR resource is allowed only
-if that resource (or an ancestor in its reference graph) appears in the
-token's `fhirContext`.
+For every resource type except `Task` and `Questionnaire` (including
+`_include` results), the RS requires:
+1. exactly one context in `authorization_details`;
+2. that `extensions.umzhconnect.organization_reference` is the counter-party
+   the RS recorded for the context's root;
+3. that the requested resource is in the root's context graph.
 
-**Example:** `GET /fhir/ServiceRequest/sr-123` requires
-`ServiceRequest/sr-123` in `fhirContext`; a token without it → HTTP 403 even
-with sufficient scope.
+Otherwise it returns HTTP 403, even with sufficient scope. `Task` instead
+checks the caller against `Task.requester`.
 
-Bruno: `negative/04-context-gate-without-context.bru`; the mock
+**Example:** `GET /fhir/Patient/pat-1` with a token bound to
+`ServiceRequest/sr-123` succeeds only if the caller is that order's recorded
+Fulfiller and the order references `Patient/pat-1`.
+
+Bruno: `validation/03`, `04`, `07`; `negative/04`, `14`, `16`, `17`. The mock
 implementation lives in `token-validator/`.
 
 ---
@@ -275,7 +285,7 @@ to L2 for real clinical data flows defeats the point of that separation.
 
 **Expected behavior:** an RS that only serves production/clinical data
 should require `auth_level = "L2"` and reject `"L1"` tokens (HTTP 403) even
-if signature, `aud`, `scope`, and `fhirContext` all check out. An RS that
+if signature, `aud`, `scope`, and the context all check out. An RS that
 deliberately supports debug/test traffic may accept `"L1"`, but should not
 treat it as interchangeable with a real integration without a documented
 reason.
@@ -321,19 +331,20 @@ carrying another hospital's `organization_reference`.
 
 ---
 
-### UC-S3 — Malformed `authorization_details`
+### UC-S3 — Invalid `authorization_details`
 
-A client sends syntactically invalid `authorization_details`, or an unknown
-`type`.
+A client sends `authorization_details` that is malformed JSON, has an unknown
+`type`, misses `identifier`, or carries more than one context.
 
-**Current behavior:** the `FhirContextMapper` ignores it and issues a token
-**without** `fhirContext` — no error is returned, and parse failures are
-swallowed silently (known gap: `FhirContextMapper` should log at WARN, but
-doesn't yet). Operationally: a customer reporting "my token has no
-fhirContext" most likely has a malformed or mistyped `authorization_details`
-parameter — the type must be exactly `umzh-connect-context`.
+**Expected behavior:** the token endpoint returns HTTP 400 with
+`"error": "invalid_authorization_details"` (RFC 9396 §5) and an
+`error_description` naming the problem. No token is issued. The check is the
+`umzh-context` client policy ([ADR 0005](../adr/0005-context-authorization-details-claim.md)).
+Operationally: a client still sending the old type `umzh-connect-context`
+gets `unsupported authorization_details type`. The type must be exactly
+`http://fhir.ch/ig/ch-umzh-connect/context`.
 
-Bruno: `negative/08-unknown-context-type.bru`.
+Bruno: `negative/08`, `11`, `12`, `13`.
 
 ---
 

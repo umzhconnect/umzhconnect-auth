@@ -2,7 +2,7 @@
 # UMZH Connect Authentication Server - local development stack
 #
 #   postgres         Keycloak backing store
-#   keycloak         Authorization Server (custom image with FhirContextMapper)
+#   keycloak         Authorization Server (custom image with the UMZH context mapper)
 #   keycloak-config  one-shot Terraform apply that configures the realm
 #   jwks-server      serves the Level-2 demo client public JWKS (./keys)
 #   token-validator  mock resource server validating tokens per the IG

@@ -9,26 +9,30 @@ implementing the IG's machine-to-machine security model:
 - staged client authentication: **Level 1** (`client_secret`, sandbox/PoC) and
   **Level 2** (`private_key_jwt` per SMART Backend Services, production
   baseline) — Level 3 (mTLS/DPoP) is out of scope
-- **RFC 9396** `authorization_details` (type `umzh-connect-context`) mapped to
-  a SMART v2 `fhirContext` claim by a custom Keycloak protocol mapper
+- **RFC 9396** `authorization_details` (type `http://fhir.ch/ig/ch-umzh-connect/context`) returned as a
+  top-level `authorization_details` claim and in the token response by a custom
+  Keycloak protocol mapper; invalid requests (unknown type, more than one
+  context, malformed JSON) are rejected with `invalid_authorization_details`
+  by a custom client-policy executor
 - `extensions.umzhconnect.organization_reference` claim set by the AS from the
   client's onboarding record
 
 The realm contract is kept identical to the
 [umzhconnect-sandbox](https://github.com/umzhconnect/umzhconnect-sandbox), so
 this Keycloak is a **drop-in replacement** for the sandbox's `keycloak`
-service.
+service — except for the context claim, which follows the current IG ahead of
+the sandbox (see [ADR 0005](docs/adr/0005-context-authorization-details-claim.md)).
 
 ## Layout
 
 | Path | Contents | Production artifact? |
 |------|----------|----------------------|
-| `keycloak/` | Custom Keycloak image (Dockerfile + `FhirContextMapper` provider) and the Terraform realm configuration | **Yes** (image + config) |
+| `keycloak/` | Custom Keycloak image (Dockerfile + the `umzh-context-mapper` / `umzh-context-executor` providers) and the Terraform realm configuration | **Yes** (image + config) |
 | `token-validator/` | Mock resource server that validates tokens per the IG and exposes sample protected endpoints | No — dev/test aid only |
 | `bruno/` | Bruno collection: token acquisition (L1/L2/context), validation calls, negative cases | No |
 | `keys/` | Committed **demo** Level 2 client keys (sandbox parity) | No |
 
-The `FhirContextMapper` source and the demo keys are ported from
+The context mapper (originally `FhirContextMapper`) and the demo keys are ported from
 `umzhconnect-sandbox` (Apache-2.0).
 
 ## Quick start
@@ -104,13 +108,14 @@ Endpoints:
 
 - `POST /validate` — body `{"token": "..."}` or `Authorization: Bearer`;
   returns a per-check report (signature, issuer, expiry, audience, algorithm,
-  lifetime, scopes, `organization_reference`, `fhirContext`, `realm_roles`)
-- `GET /fhir/Patient/:id` — requires `system/Patient.r`
-- `GET /fhir/Organization/:id` — requires `system/Organization.r` (the placer
-  client lacks it → negative test)
-- `GET /fhir/ServiceRequest/:id` — requires scope **and** a `fhirContext`
-  covering the resource (context gate)
-- `POST /fhir/Task` — requires `system/Task.c…`
+  lifetime, scopes, `organization_reference`, `context`, `realm_roles`)
+- `GET /fhir/Questionnaire/:id` — scope only (not context-gated)
+- `GET /fhir/Task/:id` — scope, and the caller must be `Task.requester`
+- `POST /fhir/Task` — `system/Task.c…`; `Task.requester` must be the caller,
+  `Task.owner` the mock Fulfiller (hospital_b)
+- `GET /fhir/{type}/:id` — every other type is context-gated: scope **and**
+  exactly one context, the caller as the root's recorded counter-party, and the
+  resource in the root's context graph
 
 ## Drop-in replacement for the sandbox
 

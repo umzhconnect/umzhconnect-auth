@@ -1,6 +1,6 @@
 ---
 recap: "Keycloak realm settings that must stay sandbox-compatible — fixed settings, how clients are generated, mappers, scopes, roles, and documented divergences."
-keywords: [umzh-connect realm, issuer, token lifetime, L1 debug client, L2, client-jwt, client-secret, private_key_jwt, client-id-mapper, client_id claim, azp, RFC 9068, at+jwt, access.token.header.type.rfc9068, org-reference-mapper, fhir-context-mapper, auth-level-mapper, auth_level, roles, admin, sandbox parity, registrationAllowed, display_name, ssl_required, start-dev, smart scopes, system scopes, optional_scopes, least privilege per request, scopes.yaml, scopes.tf, keycloak_openid_client_scope, ecosystem-audience-mapper, audience mapper, ADR 0003, ADR 0004]
+keywords: [umzh-connect realm, issuer, token lifetime, L1 debug client, L2, client-jwt, client-secret, private_key_jwt, client-id-mapper, client_id claim, azp, RFC 9068, at+jwt, access.token.header.type.rfc9068, org-reference-mapper, context-mapper, umzh-context-mapper, authorization_details claim, umzh-context client policy, umzh-context-executor, invalid_authorization_details, auth-level-mapper, auth_level, roles, admin, sandbox parity, registrationAllowed, display_name, ssl_required, start-dev, smart scopes, system scopes, optional_scopes, least privilege per request, scopes.yaml, scopes.tf, keycloak_openid_client_scope, ecosystem-audience-mapper, audience mapper, ADR 0003, ADR 0004, ADR 0005]
 ---
 
 # Realm contract
@@ -29,11 +29,15 @@ Applied to both the L2 client and, when provisioned, the L1 debug client for the
 |--------|-------------|--------|
 | `client-id-mapper` | `client_id` | Hardcoded to the client's own `client_id` (RFC 9068 §2.2 requires this claim, distinct from `azp`; Keycloak's built-in Client ID mapper is not used because it names the claim `clientId`, not `client_id` — see [keycloak/keycloak#16329](https://github.com/keycloak/keycloak/issues/16329)) |
 | `org-reference-mapper` | `extensions.umzhconnect.organization_reference` | Set by AS from the client's `organization_reference` field — never by the client itself |
-| `fhir-context-mapper` | `fhirContext` | Reads `authorization_details` from raw request; see [mapper.md](mapper.md) |
+| `context-mapper` (`umzh-context-mapper`) | `authorization_details` (also returned in the token response) | Reads the RFC 9396 `authorization_details` request parameter (type `http://fhir.ch/ig/ch-umzh-connect/context`) and writes it back normalised to `[{type, identifier}]`; see [mapper.md](mapper.md) and [ADR 0005](../docs/adr/0005-context-authorization-details-claim.md) |
 | `ecosystem-audience-mapper` | `aud` | Constant ecosystem `aud` — see [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) |
 | `auth-level-mapper` | `extensions.umzhconnect.auth_level` | Required on every client — sourced straight from the client's own YAML `auth_level` field (`"L2"` on the primary client, `"L1"` on the debug client; Terraform hard-fails if a file's `auth_level` doesn't match the directory it's in). Reinstated by [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md), superseding the deferral in [ADR 0001](../docs/adr/0001-defer-auth-level-claim.md); any future L3 client must stamp `"L3"` the same way — there's no level for which the claim is absent |
 
-`auth_level` stays under `extensions.umzhconnect` rather than moving to a bare top-level claim: that container is reserved for claims specific to the UMZH-Connect authorization model with no external spec defining them (same reason `organization_reference` lives there). `client_id` and `fhirContext` are top-level *because* RFC 9068 and SMART App Launch respectively require/define them there — not UMZH-Connect inventions. `auth_level` has no external spec backing it, so nesting it keeps that line consistent and avoids ever colliding with a future top-level standard claim of the same name. Nothing technical prevents a top-level claim — JWT claims are a flat namespace — this is a convention choice, not a constraint.
+`auth_level` stays under `extensions.umzhconnect` rather than moving to a bare top-level claim: that container is reserved for claims specific to the UMZH-Connect authorization model with no external spec defining them (same reason `organization_reference` lives there). `client_id` and `authorization_details` are top-level *because* RFC 9068 §2.2 and RFC 9396 §9.1 respectively require/define them there — not UMZH-Connect inventions. `auth_level` has no external spec backing it, so nesting it keeps that line consistent and avoids ever colliding with a future top-level standard claim of the same name. Nothing technical prevents a top-level claim — JWT claims are a flat namespace — this is a convention choice, not a constraint.
+
+## Client policy — `umzh-context`
+
+A realm client profile and policy, both named `umzh-context` (`terraform/realm.tf`), run the custom executor `umzh-context-executor` for every client. It rejects `client_credentials` token requests with 400 `invalid_authorization_details` (RFC 9396 §5) when `authorization_details` is malformed JSON, has an unknown type, misses `identifier`, or carries more than one context. This implements the IG rule that "A token request carries at most one workflow context; otherwise the AS MUST reject it with `invalid_authorization_details`". The identifier's content is not checked; that is the Resource Server's job.
 
 ## RFC 9068 conformance
 
@@ -67,3 +71,7 @@ Every M2M client carries a constant `aud` identifying the umzh-connect ecosystem
 | `registrationAllowed` | `false` | `true` | No self-registration needed for M2M |
 | `displayName` | `"UMZH Connect"` | `"UMZH Connect Sandbox"` | Intentional |
 | Built-in scopes (`email`, `profile`, `roles`, …) | Present | Absent from export | Keycloak includes them by default; sandbox export skipped them |
+| Context `authorization_details` type | `http://fhir.ch/ig/ch-umzh-connect/context` | `umzh-connect-context` | Follows the IG change (umzhconnect-ig#135 and the open PR renaming the type); [ADR 0005](../docs/adr/0005-context-authorization-details-claim.md) |
+| Context claim | `authorization_details: [{type, identifier}]`, also in the token response | `fhirContext: [{reference}]` | Same; the sandbox's Hurl suites `05-cross-party-context` and `08-context-enforcement` and its OPA policies fail against this realm until the sandbox follows the IG |
+| Invalid `authorization_details` | 400 `invalid_authorization_details` (client policy `umzh-context`) | Token issued without context | IG and RFC 9396 §5 |
+| Context mapper provider ID | `umzh-context-mapper` | `umzh-fhir-context-mapper` | Name used in the open IG PR |

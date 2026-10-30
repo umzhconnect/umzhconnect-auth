@@ -1,5 +1,5 @@
 meta {
-  name: Validate context token claims (fhirContext + organization_reference)
+  name: Validate context token claims (authorization_details + organization_reference)
   type: http
   seq: 6
 }
@@ -19,7 +19,7 @@ body:json {
 docs {
   Verifies that the fulfiller context token (auth/08) carries the three IG-required claims beyond standard OAuth:
 
-  1. fhirContext — the workflow object the token is bound to (security.md §Issued access token)
+  1. authorization_details — the context the token is bound to: exactly one entry `{type: "http://fhir.ch/ig/ch-umzh-connect/context", identifier}` (security.md §Issued access token)
   2. extensions.umzhconnect.organization_reference — resolvable registry URL of the calling organization (IHE IUA extensions container pattern)
   3. aud — the constant ecosystem audience (ADR 0003), i.e. the realm issuer URL
 
@@ -44,12 +44,18 @@ script:post-response {
 
   const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
 
-  test("fhirContext claim is present", () => {
-    expect(claims.fhirContext).to.be.an("array").with.length.greaterThan(0);
+  test("authorization_details carries exactly one context", () => {
+    expect(claims.authorization_details).to.be.an("array").with.length(1);
+    expect(claims.authorization_details[0].type).to.equal("http://fhir.ch/ig/ch-umzh-connect/context");
   });
 
-  test("fhirContext reference matches contextReference env var", () => {
-    expect(claims.fhirContext[0].reference).to.equal(bru.getEnvVar("contextReference"));
+  test("context identifier matches contextReference env var", () => {
+    expect(claims.authorization_details[0].identifier).to.equal(bru.getEnvVar("contextReference"));
+  });
+
+  test("/validate reports the context check as pass", () => {
+    const check = res.getBody().checks.find((c) => c.name === "context");
+    expect(check.status).to.equal("pass");
   });
 
   test("extensions.umzhconnect.organization_reference is a non-empty string", () => {

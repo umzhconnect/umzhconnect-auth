@@ -1,0 +1,24 @@
+meta {
+  name: Read Task output as Placer (context-gated)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{validatorUrl}}/fhir/DiagnosticReport/report-1
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{placerContextToken}}
+}
+
+docs {
+  Placer → Fulfiller direction: the Placer reads the output of its Task with a token bound to `{{taskContextReference}}` (auth/05). The mock Fulfiller has recorded hospital_a as the Task's requester and lists `DiagnosticReport/report-1` as the Task's output. Run auth/05 first.
+}
+
+assert {
+  res.status: eq 200
+  res.body.resourceType: eq DiagnosticReport
+}

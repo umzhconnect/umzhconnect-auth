@@ -1,6 +1,6 @@
 ---
 recap: "Terraform structure and pitfalls — client_id-driven client generation from keycloak-config/clients/ (L1 and L2 files together, split by each file's own auth_level field), constant ecosystem aud mapper, extra_config double-nesting trap, Vault secrets, apply commands, and the opt-in L1 debug client path."
-keywords: [keycloak/keycloak ~>5.0, extra_config, attributes prefix, double-nesting, jwks.url, use.jwks.url, clients.tf, scopes.tf, realm.tf, yamldecode, local.clients_by_id, local.clients_l2, local.clients_l1, TF_VAR_keycloak_url, TF_VAR_keycloak_public_url, keycloak_public_url, KC_HOSTNAME, keycloak-config, apply command, for_each, keycloak-config/clients, client_id, client_name, organization_reference, jwks_url, vault, vault_kv_secret_v2, admin_password, JWT OIDC, client-id-mapper, client_id claim, RFC 9068, access.token.header.type.rfc9068, at+jwt, org-reference-mapper, fhir-context-mapper, ecosystem_audience, ecosystem-audience-mapper, included_custom_audience, auth_level, terraform_data client_config_guard, lifecycle precondition, check l1_debug_clients_ignored, m2m_l1, allow_l1_debug_clients, ADR 0003, ADR 0004]
+keywords: [keycloak/keycloak ~>5.0, extra_config, attributes prefix, double-nesting, jwks.url, use.jwks.url, clients.tf, scopes.tf, realm.tf, yamldecode, local.clients_by_id, local.clients_l2, local.clients_l1, TF_VAR_keycloak_url, TF_VAR_keycloak_public_url, keycloak_public_url, KC_HOSTNAME, keycloak-config, apply command, for_each, keycloak-config/clients, client_id, client_name, organization_reference, jwks_url, vault, vault_kv_secret_v2, admin_password, JWT OIDC, client-id-mapper, client_id claim, RFC 9068, access.token.header.type.rfc9068, at+jwt, org-reference-mapper, context-mapper, umzh-context-mapper, access.tokenResponse.claim, moved blocks, keycloak_realm_client_policy_profile, keycloak_realm_client_policy_profile_policy, umzh-context-executor, any-client, ecosystem_audience, ecosystem-audience-mapper, included_custom_audience, auth_level, terraform_data client_config_guard, lifecycle precondition, check l1_debug_clients_ignored, m2m_l1, allow_l1_debug_clients, ADR 0003, ADR 0004, ADR 0005]
 ---
 
 # Terraform
@@ -12,7 +12,7 @@ Provider: `keycloak/keycloak ~> 5.0` (`terraform/versions.tf`).
 | File | Responsibility |
 |------|----------------|
 | `clients.tf` | Reads `keycloak-config/clients/*.yaml` (L1 and L2 files together, split by each file's `auth_level`) → one L2 KC client per hospital + protocol mappers, plus optional L1 debug clients |
-| `realm.tf` | Realm-level settings |
+| `realm.tf` | Realm-level settings, and the `umzh-context` client profile and policy that reject invalid `authorization_details` |
 | `variables.tf` | Input variables |
 | `outputs.tf` | Outputs (client IDs, etc.) |
 | `versions.tf` | Provider version pins |
@@ -23,7 +23,7 @@ Reads all `*.yaml` files from `keycloak-config/clients/` into `local.clients_by_
 - One `keycloak_openid_client` per hospital with `client-jwt` authenticator, the hospital's `jwks_url`, and `access.token.header.type.rfc9068 = "true"` (RFC 9068 §2.1 `at+jwt` header `typ`)
 - `client-id-mapper` — hardcoded claim mapper setting `client_id` to the client's own ID (RFC 9068 §2.2; not Keycloak's built-in Client ID mapper, which names the claim `clientId`)
 - `org-reference-mapper` — hardcoded claim mapper setting `extensions.umzhconnect.organization_reference`
-- `fhir-context-mapper` — custom protocol mapper for `authorization_details` → `fhirContext`
+- `context-mapper` (provider `umzh-context-mapper`) — custom protocol mapper copying the RFC 9396 context into a top-level `authorization_details` claim and, with `access.tokenResponse.claim = "true"`, into the token response; see [mapper.md](mapper.md). Renamed from `fhir_context`/`fhir_context_l1` (`umzh-fhir-context-mapper`) by [ADR 0005](../docs/adr/0005-context-authorization-details-claim.md). `moved` blocks keep the resource addresses, but the provider ID change makes Terraform replace the mappers on the next apply
 - `ecosystem-audience-mapper` — audience mapper writing a constant ecosystem value (the realm issuer URL) into `aud` on every token, per [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md)
 
 KC client ID = the file's own `client_id` field (convention: `{hospital}-l2`, e.g. `hospital_a-l2`; the filename is a naming convention only, never read by Terraform).
@@ -40,6 +40,10 @@ auth_level: "L2"
 ```
 
 Adding a hospital = one new YAML file + `terraform apply`. No HCL changes needed. There is no per-hospital allow-list — [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) removed the `allowed_clients` field along with the target-specific `aud:{org_id}` scope mechanism it used to gate.
+
+## realm.tf — `umzh-context` client policy
+
+`keycloak_realm_client_policy_profile.umzh_context` holds the custom executor `umzh-context-executor`. `keycloak_realm_client_policy_profile_policy.umzh_context` applies that profile to every client (condition `any-client`). On each `client_credentials` token request, the executor rejects invalid `authorization_details` with 400 `invalid_authorization_details`: malformed JSON, an unknown type, a missing identifier, or more than one context. Without this policy, the mapper only drops invalid contexts and logs a WARN. See [mapper.md](mapper.md) and [ADR 0005](../docs/adr/0005-context-authorization-details-claim.md).
 
 ## Optional L1 debug client (`keycloak-config/clients/`, filtered by `auth_level: "L1"`)
 

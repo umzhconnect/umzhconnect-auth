@@ -15,6 +15,34 @@ resource "keycloak_realm" "umzh_connect" {
   sso_session_max_lifespan = "10h0m0s"
 }
 
+# IG: "A token request carries at most one workflow context; otherwise the AS
+# MUST reject it with invalid_authorization_details" (RFC 9396 §5). A protocol
+# mapper cannot fail a token request, so the check runs as a client policy
+# executor (umzh-context-executor, keycloak/mapper) on every client_credentials
+# token request. It also rejects malformed JSON, unknown types and a missing
+# identifier. See docs/adr/0005-context-authorization-details-claim.md.
+resource "keycloak_realm_client_policy_profile" "umzh_context" {
+  realm_id    = keycloak_realm.umzh_connect.id
+  name        = "umzh-context"
+  description = "Reject invalid RFC 9396 authorization_details (UMZH Connect context)"
+
+  executor {
+    name = "umzh-context-executor"
+  }
+}
+
+resource "keycloak_realm_client_policy_profile_policy" "umzh_context" {
+  realm_id    = keycloak_realm.umzh_connect.id
+  name        = "umzh-context"
+  description = "Applies the umzh-context profile to every client"
+  enabled     = true
+  profiles    = [keycloak_realm_client_policy_profile.umzh_context.name]
+
+  condition {
+    name = "any-client"
+  }
+}
+
 resource "keycloak_role" "admin" {
   realm_id    = keycloak_realm.umzh_connect.id
   name        = "admin"

@@ -1,15 +1,18 @@
 # =============================================================================
 # UMZH Connect Authorization Server image
 #
-# Keycloak + the FhirContextMapper provider (RFC 9396 authorization_details
-# -> SMART v2 fhirContext claim). This is the production-bound artifact;
+# Keycloak + the UMZH context providers: ContextMapper (RFC 9396
+# authorization_details -> authorization_details claim in the access token and
+# token response), ContextExecutor (client policy rejecting invalid
+# authorization_details) and ContextProcessor (lets the context pass
+# Keycloak's token-response sanitizing). This is the production-bound artifact;
 # realm configuration is applied separately via Terraform (local dev) or a
 # config snapshot (deployment, later).
 #
-# Mapper source ported from umzhconnect/umzhconnect-sandbox (Apache-2.0).
+# Mapper originally ported from umzhconnect/umzhconnect-sandbox (Apache-2.0).
 # =============================================================================
 
-# ---- Stage 1: build the FhirContextMapper provider JAR ----------------------
+# ---- Stage 1: build the UMZH context provider JAR ---------------------------
 FROM maven:3.9-eclipse-temurin-17 AS mapper-build
 WORKDIR /build
 COPY mapper/pom.xml ./
@@ -19,7 +22,7 @@ RUN mvn -B -q package -DskipTests
 
 # ---- Stage 2: augment Keycloak with the provider and pre-build --------------
 FROM quay.io/keycloak/keycloak:26.7.2 AS builder
-COPY --from=mapper-build /build/target/umzh-fhir-context-mapper-*.jar /opt/keycloak/providers/
+COPY --from=mapper-build /build/target/umzh-context-mapper-*.jar /opt/keycloak/providers/
 ENV KC_DB=postgres \
     KC_HEALTH_ENABLED=true
 RUN /opt/keycloak/bin/kc.sh build

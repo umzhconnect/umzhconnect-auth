@@ -15,12 +15,12 @@ body:form-urlencoded {
   client_id: {{fulfillerClientId}}
   client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
   client_assertion: {{fulfillerClientAssertion}}
-  scope: system/ServiceRequest.rs system/Patient.r
-  authorization_details: [{"type":"umzh-connect-context","identifier":"{{contextReference}}"}]
+  scope: system/ServiceRequest.rs system/Patient.rs
+  authorization_details: [{"type":"http://fhir.ch/ig/ch-umzh-connect/context","identifier":"{{contextReference}}"}]
 }
 
 docs {
-  Canonical IG example (security.md §Context-centric authorization): the Fulfiller fetches from the Placer's FHIR server in the context of a specific ServiceRequest. The token carries fhirContext with the ServiceRequest reference; aud is the constant ecosystem audience (ADR 0003).
+  Canonical IG example (security.md §Context-centric authorization): the Fulfiller fetches from the Placer's FHIR server in the context of a specific ServiceRequest. The token carries the context as a top-level `authorization_details` claim (`[{type, identifier}]`), and the token response returns it too (RFC 9396 §7, §9.1); aud is the constant ecosystem audience (ADR 0003).
 
   This mirrors auth/05 but uses the fulfiller client (hospital_b).
 
@@ -71,9 +71,14 @@ script:post-response {
 
   const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
 
-  test("fhirContext is present and matches requested reference", () => {
-    expect(claims.fhirContext).to.be.an("array").with.length.greaterThan(0);
-    expect(claims.fhirContext[0].reference).to.equal(bru.getEnvVar("contextReference"));
+  const expected = [{ type: "http://fhir.ch/ig/ch-umzh-connect/context", identifier: bru.getEnvVar("contextReference") }];
+
+  test("authorization_details claim carries exactly the requested context", () => {
+    expect(claims.authorization_details).to.deep.equal(expected);
+  });
+
+  test("token response returns the granted authorization_details (RFC 9396 §7)", () => {
+    expect(res.getBody().authorization_details).to.deep.equal(expected);
   });
 
   test("organization_reference is present in extensions", () => {
@@ -86,7 +91,7 @@ script:post-response {
     expect(aud).to.include(expectedAud);
   });
 
-  console.log("fhirContext:", JSON.stringify(claims.fhirContext));
+  console.log("authorization_details:", JSON.stringify(claims.authorization_details));
   console.log("aud:", JSON.stringify(claims.aud));
   console.log("organization_reference:", claims.extensions?.umzhconnect?.organization_reference);
 }
