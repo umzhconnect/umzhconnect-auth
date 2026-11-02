@@ -24,7 +24,7 @@ Governed by the FHIR IG at `https://build.fhir.org/ig/umzhconnect/umzhconnect-ig
 
 **Backend Services** — instead of a client secret, clients authenticate with `private_key_jwt` signed with their private key, validated against registered JWKS. No shared secrets at Level 2.
 
-**Context (RFC 9396 `authorization_details`)** — the client names the workflow root it is operating in (`ServiceRequest/{id}` on the Placer, `Task/{id}` on the Fulfiller). The AS returns it in the token response and as a top-level `authorization_details` claim (via `ContextMapper`, see [mapper.md](mapper.md)). A token carries at most one context. The RS requires exactly one for every resource type except `Task` and `Questionnaire`, checks the caller against its own record of the counter-party, and limits the read to the root's context graph.
+**Context (RFC 9396 `authorization_details`)** — the client names the workflow root it is operating in (`ServiceRequest/{id}` on the Placer, `Task/{id}` on the Fulfiller). The AS returns it in the token response and as a top-level `authorization_details` claim (via the `umzh-context` client policy and a session note mapper, see [mapper.md](mapper.md)). A token carries at most one context. The RS requires exactly one for every resource type except `Task` and `Questionnaire`, checks the caller against its own record of the counter-party, and limits the read to the root's context graph.
 
 ## The referral flow
 

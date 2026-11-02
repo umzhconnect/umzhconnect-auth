@@ -89,7 +89,7 @@ All subsequent operations assume this has been completed.
 
 **Kubernetes (ArgoCD or similar) — the deployment path:**
 1. Build and publish the four images this repo produces: `keycloak` (custom
-   image with the `umzh-context-mapper` JAR bundled in), `token-validator`,
+   image with the `umzh-context-executor` JAR bundled in), `token-validator`,
    `tf-config` (a Terraform image built from this repo's
    `terraform/` logic only — no hospital/scope config), and
    `jwks-server`.

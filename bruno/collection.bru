@@ -7,7 +7,7 @@ docs {
   |--------|----------|
   | `auth/` | Discovery, JWKS, L2 tokens (placer/fulfiller), context tokens (placer+fulfiller with `authorization_details`) |
   | `validation/` | Health check, validate token, mock FHIR endpoints (context-gated reads in both directions, Task create/read), context token claims inspection |
-  | `negative/` | Wrong secret, garbage token, missing scope, context gate without context, expired assertion, wrong assertion `aud`, invalid `authorization_details` (unknown type, two contexts, malformed JSON, missing identifier), unsupported grant type, unreachable JWKS, resource outside the context graph, foreign context, foreign Task requester |
+  | `negative/` | Wrong secret, garbage token, missing scope, context gate without context, expired assertion, wrong assertion `aud`, invalid `authorization_details` (unknown type, two contexts, malformed JSON, missing identifier, trailing content, unknown field), unsupported grant type, unreachable JWKS, resource outside the context graph, foreign context, foreign Task requester |
   
   Suggested order: `auth/` → `validation/` → `negative/`. See each folder's own docs (folder settings → Docs) and each request's docs block for specifics.
   
@@ -42,6 +42,8 @@ docs {
   | `15-get-token-foreign-context.bru` | Setup: AS issues a token for a context the caller is not party to → 200 |
   | `16-read-with-foreign-context.bru` | Caller is not the recorded counter-party → 403 |
   | `17-create-task-foreign-requester.bru` | `Task.requester` is not the caller → 403 |
+  | `18-trailing-json.bru` | Valid context followed by trailing text → 400 `invalid_authorization_details` |
+  | `19-unknown-field.bru` | Context with a field other than `type`/`identifier` → 400 (RFC 9396 §5) |
 
   ## Notes
   

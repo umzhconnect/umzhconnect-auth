@@ -1,11 +1,10 @@
 # =============================================================================
 # UMZH Connect Authorization Server image
 #
-# Keycloak + the UMZH context providers: ContextMapper (RFC 9396
-# authorization_details -> authorization_details claim in the access token and
-# token response), ContextExecutor (client policy rejecting invalid
-# authorization_details) and ContextProcessor (lets the context pass
-# Keycloak's token-response sanitizing). This is the production-bound artifact;
+# Keycloak + the UMZH context provider: ContextExecutor, a client-policy
+# executor that validates RFC 9396 authorization_details and stores the
+# context for Keycloak's built-in session note mapper. This is the
+# production-bound artifact;
 # realm configuration is applied separately via Terraform (local dev) or a
 # config snapshot (deployment, later).
 #

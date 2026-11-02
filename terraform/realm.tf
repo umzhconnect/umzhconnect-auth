@@ -19,12 +19,15 @@ resource "keycloak_realm" "umzh_connect" {
 # MUST reject it with invalid_authorization_details" (RFC 9396 §5). A protocol
 # mapper cannot fail a token request, so the check runs as a client policy
 # executor (umzh-context-executor, keycloak/mapper) on every client_credentials
-# token request. It also rejects malformed JSON, unknown types and a missing
-# identifier. See docs/adr/0005-context-authorization-details-claim.md.
+# token request. It also rejects malformed JSON, unknown types, unknown fields
+# and a missing identifier, and stores the granted context in the user session
+# note read by the authorization-details-mapper (clients.tf). Without this
+# policy, tokens carry no context.
+# See docs/adr/0005-context-authorization-details-claim.md.
 resource "keycloak_realm_client_policy_profile" "umzh_context" {
   realm_id    = keycloak_realm.umzh_connect.id
   name        = "umzh-context"
-  description = "Reject invalid RFC 9396 authorization_details (UMZH Connect context)"
+  description = "Validate and store the RFC 9396 authorization_details context (UMZH Connect)"
 
   executor {
     name = "umzh-context-executor"

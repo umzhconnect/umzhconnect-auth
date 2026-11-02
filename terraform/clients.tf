@@ -178,18 +178,22 @@ resource "keycloak_openid_hardcoded_claim_protocol_mapper" "auth_level" {
 }
 
 # RFC 9396 authorization_details context -> top-level authorization_details
-# claim in the access token and the token response (umzh-context-mapper).
-# Invalid requests are rejected by the umzh-context client policy (realm.tf).
+# claim in the access token and the token response. The umzh-context client
+# policy (realm.tf) validates the request and stores the normalised context in
+# the user session note "umzh.context"; this built-in mapper copies it out.
 resource "keycloak_generic_protocol_mapper" "context" {
   for_each = local.clients_l2
 
   realm_id        = keycloak_realm.umzh_connect.id
   client_id       = keycloak_openid_client.m2m[each.key].id
-  name            = "context-mapper"
+  name            = "authorization-details-mapper"
   protocol        = "openid-connect"
-  protocol_mapper = "umzh-context-mapper"
+  protocol_mapper = "oidc-usersessionmodel-note-mapper"
 
   config = {
+    "user.session.note"          = "umzh.context"
+    "claim.name"                 = "authorization_details"
+    "jsonType.label"             = "JSON"
     "id.token.claim"             = "false"
     "access.token.claim"         = "true"
     "access.tokenResponse.claim" = "true"
@@ -303,18 +307,22 @@ resource "keycloak_openid_hardcoded_claim_protocol_mapper" "auth_level_l1" {
 }
 
 # RFC 9396 authorization_details context -> top-level authorization_details
-# claim in the access token and the token response (umzh-context-mapper).
-# Invalid requests are rejected by the umzh-context client policy (realm.tf).
+# claim in the access token and the token response. The umzh-context client
+# policy (realm.tf) validates the request and stores the normalised context in
+# the user session note "umzh.context"; this built-in mapper copies it out.
 resource "keycloak_generic_protocol_mapper" "context_l1" {
   for_each = local.clients_l1
 
   realm_id        = keycloak_realm.umzh_connect.id
   client_id       = keycloak_openid_client.m2m_l1[each.key].id
-  name            = "context-mapper"
+  name            = "authorization-details-mapper"
   protocol        = "openid-connect"
-  protocol_mapper = "umzh-context-mapper"
+  protocol_mapper = "oidc-usersessionmodel-note-mapper"
 
   config = {
+    "user.session.note"          = "umzh.context"
+    "claim.name"                 = "authorization_details"
+    "jsonType.label"             = "JSON"
     "id.token.claim"             = "false"
     "access.token.claim"         = "true"
     "access.tokenResponse.claim" = "true"
@@ -336,8 +344,9 @@ resource "keycloak_openid_audience_protocol_mapper" "ecosystem_audience_l1" {
 }
 
 # Renamed from fhir_context / fhir_context_l1 with the switch to the IG's
-# authorization_details claim (ADR 0005). The provider ID changes too, which
-# forces replacement of the mapper itself; moved keeps the address history.
+# authorization_details claim (ADR 0005). The mapper type changes too (custom
+# mapper -> built-in session note mapper), which forces replacement of the
+# mapper itself; moved keeps the address history.
 moved {
   from = keycloak_generic_protocol_mapper.fhir_context
   to   = keycloak_generic_protocol_mapper.context

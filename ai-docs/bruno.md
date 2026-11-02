@@ -42,7 +42,7 @@ Context tokens send `authorization_details` with type `http://fhir.ch/ig/ch-umzh
 - `auth/08` is the Fulfiller's token for `{{contextReference}}` (`ServiceRequest/sr-123`).
 - `auth/05` is the Placer's token for `{{taskContextReference}}` (`Task/task-456`).
 
-Both assert the normalised claim and the token-response `authorization_details`. `negative/08`, `11`, `12` and `13` expect 400 `invalid_authorization_details` from the `umzh-context` client policy. `negative/15` stores `foreignContextToken` for `negative/16`. The mock resource server's records (counter-parties, context graphs) are described in [token-validator.md](token-validator.md).
+Both assert the normalised claim and the token-response `authorization_details`. `negative/08`, `11`, `12`, `13`, `18` and `19` expect 400 `invalid_authorization_details` from the `umzh-context` client policy. `negative/15` stores `foreignContextToken` for `negative/16`. The mock resource server's records (counter-parties, context graphs) are described in [token-validator.md](token-validator.md).
 
 ## Hosted client JWKS (`03-client-hosted-jwks.bru`)
 

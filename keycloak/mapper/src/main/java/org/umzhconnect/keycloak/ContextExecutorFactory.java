@@ -28,7 +28,8 @@ public class ContextExecutorFactory implements ClientPolicyExecutorProviderFacto
     @Override
     public String getHelpText() {
         return "Rejects client_credentials token requests whose authorization_details are not "
-             + "exactly one UMZH Connect context (" + ContextAuthorizationDetails.TYPE + ").";
+             + "exactly one UMZH Connect context (" + ContextExecutor.TYPE + "), and stores the "
+             + "context in the user session note " + ContextExecutor.NOTE + " for the session note mapper.";
     }
 
     @Override

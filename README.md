@@ -10,10 +10,11 @@ implementing the IG's machine-to-machine security model:
   **Level 2** (`private_key_jwt` per SMART Backend Services, production
   baseline) — Level 3 (mTLS/DPoP) is out of scope
 - **RFC 9396** `authorization_details` (type `http://fhir.ch/ig/ch-umzh-connect/context`) returned as a
-  top-level `authorization_details` claim and in the token response by a custom
-  Keycloak protocol mapper; invalid requests (unknown type, more than one
-  context, malformed JSON) are rejected with `invalid_authorization_details`
-  by a custom client-policy executor
+  top-level `authorization_details` claim and in the token response. A custom
+  client-policy executor validates the request (rejecting unknown types or
+  fields, more than one context, malformed JSON with
+  `invalid_authorization_details`) and stores the context for Keycloak's
+  built-in session note mapper
 - `extensions.umzhconnect.organization_reference` claim set by the AS from the
   client's onboarding record
 
@@ -27,7 +28,7 @@ the sandbox (see [ADR 0005](docs/adr/0005-context-authorization-details-claim.md
 
 | Path | Contents | Production artifact? |
 |------|----------|----------------------|
-| `keycloak/` | Custom Keycloak image (Dockerfile + the `umzh-context-mapper` / `umzh-context-executor` providers) and the Terraform realm configuration | **Yes** (image + config) |
+| `keycloak/` | Custom Keycloak image (Dockerfile + the `umzh-context-executor` client-policy provider) and the Terraform realm configuration | **Yes** (image + config) |
 | `token-validator/` | Mock resource server that validates tokens per the IG and exposes sample protected endpoints | No — dev/test aid only |
 | `bruno/` | Bruno collection: token acquisition (L1/L2/context), validation calls, negative cases | No |
 | `keys/` | Committed **demo** Level 2 client keys (sandbox parity) | No |

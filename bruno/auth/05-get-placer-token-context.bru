@@ -89,7 +89,7 @@ script:post-response {
 }
 
 docs {
-  Placer (hospital_a) requests an L2 token to read the output of a Task on the Fulfiller's server: the RFC 9396 `authorization_details` parameter names the workflow root `{{taskContextReference}}` (type `http://fhir.ch/ig/ch-umzh-connect/context`). The `ContextMapper` copies the context, normalised to `{type, identifier}`, into a top-level `authorization_details` claim and into the token response. validation/04 uses the token to read the Task's output.
+  Placer (hospital_a) requests an L2 token to read the output of a Task on the Fulfiller's server: the RFC 9396 `authorization_details` parameter names the workflow root `{{taskContextReference}}` (type `http://fhir.ch/ig/ch-umzh-connect/context`). The `umzh-context` client policy stores the context, normalised to `{type, identifier}`, and the built-in session note mapper writes it as a top-level `authorization_details` claim and into the token response. validation/04 uses the token to read the Task's output.
   
   Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }

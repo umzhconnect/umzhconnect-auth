@@ -20,7 +20,7 @@ body:form-urlencoded {
 }
 
 docs {
-  Sends authorization_details that is not valid JSON. The umzh-context client policy rejects it with 400 `invalid_authorization_details` instead of issuing a token without a context (the old FhirContextMapper swallowed parse errors silently).
+  Sends authorization_details that is not valid JSON. The umzh-context client policy rejects it with 400 `invalid_authorization_details` instead of issuing a token without a context (the old FhirContextMapper swallowed parse errors silently). See negative/18 for trailing content after valid JSON.
 
   Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }

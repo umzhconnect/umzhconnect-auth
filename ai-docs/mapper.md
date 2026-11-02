@@ -1,29 +1,31 @@
 ---
-recap: "ContextMapper, ContextExecutor, ContextProcessor — how the RFC 9396 context reaches the token and token response, why the mapper reads raw session notes, and why rejection is a client policy."
-keywords: [ContextMapper.java, ContextExecutor.java, ContextExecutorFactory.java, ContextProcessor.java, ContextProcessorFactory.java, ContextAuthorizationDetails.java, AuthorizationDetailsParser.registerParser, sanitizeBeforeSendingTokenResponse, umzh-context-mapper, umzh-context-executor, umzh-context client policy, authorization_details, http://fhir.ch/ig/ch-umzh-connect/context, invalid_authorization_details, RFC 9396, OIDCAccessTokenResponseMapper, access.tokenResponse.claim, ServiceAccountTokenRequestContext, SERVICE_ACCOUNT_TOKEN_REQUEST, ClientPolicyException, client_request_param_authorization_details, AuthorizationRequestContext, AuthorizationDetailsProcessor, client_credentials, session notes, WARN logging, Keycloak 26.x, ADR 0005]
+recap: "ContextExecutor + built-in session note mapper — how the RFC 9396 context is validated, stored and written into the token and token response."
+keywords: [ContextExecutor.java, ContextExecutorFactory.java, umzh-context-executor, umzh-context client policy, umzh.context, user session note, oidc-usersessionmodel-note-mapper, authorization-details-mapper, jsonType.label JSON, access.tokenResponse.claim, authorization_details, http://fhir.ch/ig/ch-umzh-connect/context, invalid_authorization_details, RFC 9396, FAIL_ON_TRAILING_TOKENS, unknown fields, ServiceAccountTokenRequestContext, SERVICE_ACCOUNT_TOKEN_REQUEST, ClientPolicyException, AuthorizationDetailsProcessor, sanitizeBeforeSendingTokenResponse, client_credentials, Keycloak 26.x, umzh-context-mapper JAR, ADR 0005]
 ---
 
-# Context mapper, executor and processor
+# Context executor and session note mapper
 
-Source: `keycloak/mapper/src/main/java/org/umzhconnect/keycloak/`. The JAR is `umzh-context-mapper-*.jar`. It is bundled into the image at build time by the multi-stage `keycloak/Dockerfile`, with no runtime volume mount. It was originally ported from `umzhconnect-sandbox` (Apache-2.0) as `FhirContextMapper`. See [ADR 0005](../docs/adr/0005-context-authorization-details-claim.md) for why it now diverges from the sandbox.
+Source: `keycloak/mapper/src/main/java/org/umzhconnect/keycloak/`. The JAR is still called `umzh-context-mapper-*.jar` and is bundled into the image at build time by the multi-stage `keycloak/Dockerfile`. The context was originally handled by `FhirContextMapper`, ported from `umzhconnect-sandbox` (Apache-2.0). See [ADR 0005](../docs/adr/0005-context-authorization-details-claim.md) for the current design and why it diverges from the sandbox.
 
-| Class | Provider ID | Role |
-|-------|-------------|------|
-| `ContextAuthorizationDetails` | — | Shared parser and rules for the context type `http://fhir.ch/ig/ch-umzh-connect/context` |
-| `ContextExecutor` (+ `ContextExecutorFactory`) | `umzh-context-executor` | Client-policy executor that rejects invalid token requests with 400 `invalid_authorization_details` |
-| `ContextMapper` | `umzh-context-mapper` | Protocol mapper that writes the context into the access token and the token response |
-| `ContextProcessor` (+ `ContextProcessorFactory`) | `http://fhir.ch/ig/ch-umzh-connect/context` | RAR `AuthorizationDetailsProcessor` that lets the context pass Keycloak's token-response sanitizing |
+| Piece | Where | Role |
+|-------|-------|------|
+| `ContextExecutor` (+ `ContextExecutorFactory`) | this JAR, provider `umzh-context-executor` | Client-policy executor: validates `authorization_details` and stores the normalised context in the user session note `umzh.context` |
+| `umzh-context` client profile + policy | `terraform/realm.tf` | Runs the executor for every client (`any-client`) |
+| `authorization-details-mapper` | `terraform/clients.tf`, built-in `oidc-usersessionmodel-note-mapper` | Writes the note as the `authorization_details` claim and into the token response |
 
-## Request rules (`ContextAuthorizationDetails.parse`)
+## Request rules (`ContextExecutor.identifier`)
 
 - Parameter absent or blank → no context. This is valid: Task and Questionnaire need no context.
-- Otherwise the parameter must be a non-empty JSON array of objects. Every entry must have `type` equal to the UMZH context URI and a non-blank string `identifier`. At most one entry is allowed.
-- Anything else is rejected (RFC 9396 §5): malformed JSON, an unknown type, a missing identifier, or two or more contexts.
+- Otherwise the parameter must be a JSON array holding exactly one object, with:
+  - `type` equal to `http://fhir.ch/ig/ch-umzh-connect/context`;
+  - a non-blank string `identifier`;
+  - no other fields (RFC 9396 §5: unknown fields are refused, not dropped).
+- Anything else is rejected with 400 `invalid_authorization_details`. That includes malformed JSON and trailing content after a valid array: the parser enables `FAIL_ON_TRAILING_TOKENS`, because Jackson's `readTree` otherwise ignores whatever follows the first value.
 - The identifier's **content** is not checked; the Resource Server resolves it.
 
 ## Output
 
-Both the access token (top-level claim, RFC 9396 §9.1) and the token response (RFC 9396 §7) carry exactly:
+The executor stores the context as a JSON string in the user session note `umzh.context`. The built-in session note mapper (`jsonType.label = JSON`, `access.token.claim` and `access.tokenResponse.claim` both `true`) turns it into:
 
 ```json
 "authorization_details": [
@@ -31,30 +33,19 @@ Both the access token (top-level claim, RFC 9396 §9.1) and the token response (
 ]
 ```
 
-Extra request fields are dropped. The token response part works only when the mapper config sets `access.tokenResponse.claim = "true"`, which `terraform/clients.tf` does. `AbstractOIDCProtocolMapper` skips `setClaim(AccessTokenResponse, …)` otherwise.
+This appears as a top-level access-token claim (RFC 9396 §9.1) and in the token response (RFC 9396 §7).
 
-## Why a RAR processor is needed for the token response
+In the token response, the mapper puts the value in the generic claims. Keycloak's own `authorization_details` response field stays null, so two things follow:
 
-Before sending a token response, `OAuth2GrantTypeBase.createTokenResponse` passes every `authorization_details` entry through `AuthorizationDetailsProcessorManager.sanitizeBeforeSendingTokenResponse`. That method:
+- Keycloak's RAR sanitizing (`sanitizeBeforeSendingTokenResponse`) is skipped. Without a registered `AuthorizationDetailsProcessor` for the type, that step would return a 500.
+- Keycloak serializes JSON without null fields, so the response carries a single `authorization_details` key.
 
-- looks up a processor **by factory ID**, not by `getSupportedType()`. `ContextProcessorFactory`'s ID must therefore be the type URI itself;
-- converts the entry with `asSubtype()`. That needs a parser registered for the type through `AuthorizationDetailsParser.registerParser`, which `ContextProcessorFactory.init` does as a pass-through.
-
-Without either, a valid context request fails with HTTP 500 (`Unsupported type ...` or `Unsupported to parse response of type ...`). Keycloak never calls the processor's `process()` for `client_credentials`, so request validation stays in `ContextExecutor`.
-
-## Why rejection is a client policy
+## Why a client policy
 
 A protocol mapper cannot fail a token request. Keycloak's RAR SPI (`AuthorizationDetailsProcessor`) is not invoked for `client_credentials`: in 26.7.2, `ClientCredentialsGrantType` only stores the raw parameter as a session note.
 
-The grant does fire the client-policy event `SERVICE_ACCOUNT_TOKEN_REQUEST`. That event carries the form parameters through `ServiceAccountTokenRequestContext`, and the grant turns a `ClientPolicyException` into an HTTP 400 with the exception's error code. `terraform/realm.tf` registers the executor in the `umzh-context` client profile and policy, which apply to `any-client`.
+The grant does fire the client-policy event `SERVICE_ACCOUNT_TOKEN_REQUEST`, and it fires it before building the token. The event's `ServiceAccountTokenRequestContext` carries the form parameters and the client session, and through the client session the user session. A `ClientPolicyException` thrown there becomes an HTTP 400 carrying the exception's error code.
 
-If that policy is missing (for example in a realm not provisioned by Terraform), invalid requests are no longer rejected. The mapper still emits no context for them and logs a WARN naming the client.
+**The policy is required for every context.** If the `umzh-context` profile or policy is missing, tokens carry no context at all and nothing is logged; context-gated reads then fail with 403. This fails closed, and Bruno `auth/05` and `auth/08` catch it.
 
-## Why the mapper reads raw session notes
-
-Keycloak 26.x does **not** populate `AuthorizationRequestContext` with custom `authorization_details` types for the `client_credentials` flow; only built-in SMART scope entries appear there. The mapper therefore reads the raw session notes directly:
-
-- Key: `authorization_details`
-- Fallback key: `client_request_param_authorization_details`
-
-**Do not use the standard `AuthorizationRequestContext` API for this.** It returns empty results for every `client_credentials` token request.
+**The design depends on event order:** the event must fire before the token is built. This holds on Keycloak 26.7.2 and 26.8.1. Re-run Bruno on every Keycloak upgrade.

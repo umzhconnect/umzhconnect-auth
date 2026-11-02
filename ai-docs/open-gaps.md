@@ -1,6 +1,6 @@
 ---
 recap: "Prioritized action list — security issues and pending UMZH confirmations."
-keywords: [.env git, .gitignore, .env.example, ContextMapper WARN, invalid_authorization_details, ADR 0005, tenant claim, ssl_required, start-dev, onboarding runbook, placer/fulfiller distinction, auth_level, ADR 0001, ADR 0004, L1 debug client, keycloak-config/clients]
+keywords: [.env git, .gitignore, .env.example, invalid_authorization_details, umzh-context client policy, ADR 0005, tenant claim, ssl_required, start-dev, onboarding runbook, placer/fulfiller distinction, auth_level, ADR 0001, ADR 0004, L1 debug client, keycloak-config/clients]
 ---
 
 # Open gaps and action list
@@ -21,7 +21,7 @@ From the 2026-06-16 meeting, updated through 2026-06-24.
 
 - Onboarding runbook: documented as operator use cases in [docs/use-cases/](../docs/use-cases/operational.md) — onboarding, config changes, lifecycle, incident response, plus the technical reference behaviors in [technical.md](../docs/use-cases/technical.md).
 - `authorization_details` → `fhirContext` mapping: superseded 2026-10-30 by [ADR 0005](../docs/adr/0005-context-authorization-details-claim.md) — the IG now carries the context as a top-level `authorization_details` claim and in the token response.
-- Silent parse errors in the context mapper (was gap #2): invalid `authorization_details` are now rejected at the token endpoint with 400 `invalid_authorization_details` (client policy `umzh-context`); the mapper logs a WARN if that policy is missing. See [mapper.md](mapper.md).
+- Silent parse errors in the context mapper (was gap #2): invalid `authorization_details` are now rejected at the token endpoint with 400 `invalid_authorization_details` (client policy `umzh-context`). See [mapper.md](mapper.md).
 - L1/L2/L3 direction: L2 is the default and only client provisioned automatically; L3 out of scope. **Superseded in part by [ADR 0004](../docs/adr/0004-reinstate-l1-debug-client.md) (2026-07-16):** L1 is reinstated as an explicit, per-hospital opt-in debug client (a `keycloak-config/clients/*.yaml` file with `auth_level: "L1"`, conventionally `{hospital}-l1` client_id), requested by USZ and Balgrist for firewall/connectivity debugging. No upgrade path between levels is still needed — a hospital's L1 and L2 clients are independent.
 - Onboarding approach: Terraform, reproducible, VCS-based.
 - One KC client per hospital: replaced D1-via-YAML (one client per org+app+FHIR server) with one client per hospital. See [aud-design.md](aud-design.md), [ADR 0002](../docs/adr/0002-one-client-per-hospital.md), [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md).

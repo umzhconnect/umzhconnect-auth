@@ -76,10 +76,11 @@ authorization_details=[{"type":"http://fhir.ch/ig/ch-umzh-connect/context","iden
 ```json
 "authorization_details": [{"type": "http://fhir.ch/ig/ch-umzh-connect/context", "identifier": "ServiceRequest/sr-123"}]
 ```
-At most one context per request. The `ContextMapper` reads the raw request
-parameter directly (not via Keycloak's `AuthorizationRequestContext`, which is
-not populated for `client_credentials` with custom `authorization_details`
-types on KC 26.x). Invalid requests are rejected — see
+At most one context per request, with no fields other than `type` and
+`identifier`. The `umzh-context` client policy validates the request and
+stores the context in a user session note; Keycloak's built-in session note
+mapper writes it into the token and token response. Invalid requests are
+rejected — see
 [UC-S3](#uc-s3--invalid-authorization_details).
 
 Bruno: `auth/05-get-placer-token-context.bru`, `auth/08-get-fulfiller-token-context.bru`.
@@ -333,8 +334,9 @@ carrying another hospital's `organization_reference`.
 
 ### UC-S3 — Invalid `authorization_details`
 
-A client sends `authorization_details` that is malformed JSON, has an unknown
-`type`, misses `identifier`, or carries more than one context.
+A client sends `authorization_details` that is malformed JSON (or has trailing
+content), has an unknown `type` or unknown fields, misses `identifier`, or
+carries more than one context.
 
 **Expected behavior:** the token endpoint returns HTTP 400 with
 `"error": "invalid_authorization_details"` (RFC 9396 §5) and an
@@ -344,7 +346,7 @@ Operationally: a client still sending the old type `umzh-connect-context`
 gets `unsupported authorization_details type`. The type must be exactly
 `http://fhir.ch/ig/ch-umzh-connect/context`.
 
-Bruno: `negative/08`, `11`, `12`, `13`.
+Bruno: `negative/08`, `11`, `12`, `13`, `18`, `19`.
 
 ---
 

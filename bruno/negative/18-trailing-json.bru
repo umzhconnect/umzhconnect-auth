@@ -1,0 +1,66 @@
+meta {
+  name: authorization_details with trailing content (400)
+  type: http
+  seq: 18
+}
+
+post {
+  url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  grant_type: client_credentials
+  client_id: {{placerClientId}}
+  client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+  client_assertion: {{placerClientAssertion}}
+  scope: system/ServiceRequest.rs system/Patient.rs
+  authorization_details: [{"type":"http://fhir.ch/ig/ch-umzh-connect/context","identifier":"ServiceRequest/sr-123"}] trailing
+}
+
+docs {
+  A valid context array followed by extra text is not valid JSON. The executor's parser fails on trailing tokens and rejects the request with 400 `invalid_authorization_details` (before the PR #5 review fix, the trailing text was ignored and a token was issued).
+
+  Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
+}
+
+assert {
+  res.status: eq 400
+  res.body.error: eq invalid_authorization_details
+}
+
+script:pre-request {
+  const crypto = require("crypto");
+  const fs = require("fs");
+  const path = require("path");
+
+  const keysDir = bru.getEnvVar("l2KeysDir") || path.resolve(bru.cwd(), "..", "keys");
+  const pem = fs.readFileSync(path.join(keysDir, "hospital_a-l2.key"), "utf8");
+
+  const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+  const tokenEndpoint = `${bru.getEnvVar("keycloakUrl")}/realms/${bru.getEnvVar("realm")}/protocol/openid-connect/token`;
+
+  const clientId = bru.getEnvVar("placerClientId");
+  const header = { alg: "RS256", typ: "JWT", kid: "hospital_a-l2" };
+  const payload = {
+    iss: clientId,
+    sub: clientId,
+    aud: tokenEndpoint,
+    iat: now,
+    exp: now + 60,
+    jti: crypto.randomUUID(),
+  };
+
+  const signingInput = `${b64url(header)}.${b64url(payload)}`;
+  const signature = crypto
+    .sign("RSA-SHA256", Buffer.from(signingInput), pem)
+    .toString("base64url");
+
+  bru.setVar("placerClientAssertion", `${signingInput}.${signature}`);
+}
+
+script:post-response {
+  console.log("error:", res.getBody().error, "-", res.getBody().error_description);
+}
