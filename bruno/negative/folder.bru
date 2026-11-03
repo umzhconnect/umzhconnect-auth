@@ -3,7 +3,7 @@ meta {
 }
 
 docs {
-  Adversarial and error-path requests: wrong client authentication method, malformed/garbage tokens, a resource read with an unrequested scope, expired or misdirected client assertions, an unrecognized `authorization_details` type, an unsupported grant type, and an onboarded hospital whose `jwks_url` is unreachable locally. Each documents an expected rejection — except `08-unknown-context-type`, which confirms a specific non-obvious success/silent-behavior case rather than a hard failure.
+  Adversarial and error-path requests: wrong client authentication method, malformed/garbage tokens, a resource read with an unrequested scope, expired or misdirected client assertions, invalid `authorization_details` (unknown type, two contexts, malformed JSON, missing identifier, trailing content, unknown field — all 400 `invalid_authorization_details`), an unsupported grant type, an onboarded hospital whose `jwks_url` is unreachable locally, and the Resource Server context rules (resource outside the context graph, a context the caller is not party to, a foreign `Task.requester`). Each documents an expected rejection — except `15-get-token-foreign-context`, the setup for 16, which shows that the AS issues a token for any context because counter-party entitlement is a Resource Server obligation.
 
   See each request's own docs block for the exact behavior and its RFC/IG backing. Some requests here reuse tokens obtained in `auth/`.
 }

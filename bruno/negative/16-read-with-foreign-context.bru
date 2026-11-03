@@ -1,0 +1,23 @@
+meta {
+  name: Read with a context the caller is not party to (403)
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{validatorUrl}}/fhir/DiagnosticReport/report-1
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{foreignContextToken}}
+}
+
+docs {
+  Uses `foreignContextToken` (negative/15): hospital_b holds a token bound to `Task/task-456`, but the mock Fulfiller recorded hospital_a as that Task's requester. IG step 2 (counter-party entitlement) compares `extensions.umzhconnect.organization_reference` with the RS's own record and rejects the read with 403. Run negative/15 first.
+}
+
+assert {
+  res.status: eq 403
+}

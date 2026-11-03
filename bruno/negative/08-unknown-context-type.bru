@@ -1,5 +1,5 @@
 meta {
-  name: Unknown authorization_details type — no fhirContext in token (200)
+  name: Unknown authorization_details type (400)
   type: http
   seq: 8
 }
@@ -15,25 +15,19 @@ body:form-urlencoded {
   client_id: {{placerClientId}}
   client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
   client_assertion: {{placerClientAssertion}}
-  scope: system/ServiceRequest.rs system/Patient.r
+  scope: system/ServiceRequest.rs system/Patient.rs
   authorization_details: [{"type":"unknown-context-type","identifier":"ServiceRequest/sr-123"}]
 }
 
 docs {
-  Sends a syntactically valid authorization_details array but with an unrecognized type ("unknown-context-type" instead of "umzh-connect-context"). FhirContextMapper only processes type "umzh-connect-context" and silently skips everything else — so a token is issued, but with no fhirContext claim.
-
-  Expected: KC issues a 200 token. The post-response script decodes the JWT and asserts that fhirContext is ABSENT.
-
-  This documents the silent behavior for unknown types. A client sending this would then fail at the Resource Server's context gate (see validation/04 and negative/04) because the token lacks fhirContext.
-
-  Related open gap: FhirContextMapper.java:98 also swallows parse errors on malformed JSON, producing the same silent outcome (open-gaps.md §2).
+  Sends a syntactically valid authorization_details array with an unrecognized type ("unknown-context-type" instead of `http://fhir.ch/ig/ch-umzh-connect/context`). RFC 9396 §5 requires the AS to refuse unknown authorization details types, so the umzh-context client policy (ContextExecutor) rejects the token request with 400 `invalid_authorization_details` — no token is issued.
 
   Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }
 
 assert {
-  res.status: eq 200
-  res.body.access_token: isDefined
+  res.status: eq 400
+  res.body.error: eq invalid_authorization_details
 }
 
 script:pre-request {
@@ -68,14 +62,5 @@ script:pre-request {
 }
 
 script:post-response {
-  if (res.getStatus() !== 200) return;
-
-  const token = res.getBody().access_token;
-  const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
-
-  test("fhirContext is absent when type is unrecognized", () => {
-    expect(claims.fhirContext).to.be.undefined;
-  });
-
-  console.log("fhirContext (should be undefined):", claims.fhirContext);
+  console.log("error:", res.getBody().error, "-", res.getBody().error_description);
 }

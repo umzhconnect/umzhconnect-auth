@@ -1,0 +1,23 @@
+meta {
+  name: Read a resource outside the context graph (403)
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{validatorUrl}}/fhir/Patient/pat-2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{fulfillerContextToken}}
+}
+
+docs {
+  The Fulfiller's context token (auth/08) is bound to `ServiceRequest/sr-123`, whose context graph contains `Patient/pat-1` but not `Patient/pat-2`. IG step 3 (graph membership) rejects the read with 403 even though the token has `system/Patient.rs` and a valid context. Run auth/08 first.
+}
+
+assert {
+  res.status: eq 403
+}

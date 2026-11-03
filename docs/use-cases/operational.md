@@ -89,7 +89,7 @@ All subsequent operations assume this has been completed.
 
 **Kubernetes (ArgoCD or similar) — the deployment path:**
 1. Build and publish the four images this repo produces: `keycloak` (custom
-   image with the `FhirContextMapper` JAR bundled in), `token-validator`,
+   image with the `umzh-context-executor` JAR bundled in), `token-validator`,
    `tf-config` (a Terraform image built from this repo's
    `terraform/` logic only — no hospital/scope config), and
    `jwks-server`.
@@ -508,7 +508,7 @@ FHIR server operators so they can apply their own blocks if warranted.
 
 ### UC-L4 — Updating the authentication server
 
-The Keycloak image is updated (new Keycloak version, `FhirContextMapper`
+The Keycloak image is updated (new Keycloak version, context mapper/executor
 change, or base-image CVE patch).
 
 **Actor:** platform operator

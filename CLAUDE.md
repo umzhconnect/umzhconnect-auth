@@ -22,7 +22,7 @@ Read the relevant doc before making changes. The frontmatter `keywords` field is
 | [ai-docs/realm-contract.md](ai-docs/realm-contract.md) | Realm settings, clients, mappers, sandbox parity |
 | [ai-docs/config-model.md](ai-docs/config-model.md) | YAML config model — hospitals, onboarding |
 | [ai-docs/terraform.md](ai-docs/terraform.md) | Terraform patterns and pitfalls |
-| [ai-docs/mapper.md](ai-docs/mapper.md) | FhirContextMapper — raw session notes, not AuthorizationRequestContext |
+| [ai-docs/mapper.md](ai-docs/mapper.md) | ContextExecutor + built-in session note mapper — authorization_details validation, claim and token response |
 | [ai-docs/infrastructure.md](ai-docs/infrastructure.md) | docker-compose, backchannel URL, jwks-server |
 | [ai-docs/bruno.md](ai-docs/bruno.md) | Bruno collection, L2 sandbox mode |
 | [ai-docs/token-validator.md](ai-docs/token-validator.md) | Token validator config and endpoints |

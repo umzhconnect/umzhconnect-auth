@@ -15,8 +15,8 @@ body:form-urlencoded {
   client_id: {{placerClientId}}
   client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
   client_assertion: {{placerClientAssertion}}
-  scope: system/ServiceRequest.rs system/Patient.r
-  authorization_details: [{"type":"umzh-connect-context","identifier":"{{contextReference}}"}]
+  scope: system/DiagnosticReport.rs
+  authorization_details: [{"type":"http://fhir.ch/ig/ch-umzh-connect/context","identifier":"{{taskContextReference}}"}]
 }
 
 assert {
@@ -65,22 +65,31 @@ script:post-response {
   
   const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
   
-  test("fhirContext is present and matches contextReference", () => {
-    expect(claims.fhirContext).to.be.an("array").with.length.greaterThan(0);
-    expect(claims.fhirContext[0].reference).to.equal(bru.getEnvVar("contextReference"));
+  const expected = [{ type: "http://fhir.ch/ig/ch-umzh-connect/context", identifier: bru.getEnvVar("taskContextReference") }];
+
+  test("authorization_details claim carries exactly the requested context", () => {
+    expect(claims.authorization_details).to.deep.equal(expected);
+  });
+
+  test("token response returns the granted authorization_details (RFC 9396 §7)", () => {
+    expect(res.getBody().authorization_details).to.deep.equal(expected);
+  });
+
+  test("no legacy fhirContext claim", () => {
+    expect(claims.fhirContext).to.be.undefined;
   });
   
   test("organization_reference is present in extensions", () => {
     expect(claims.extensions?.umzhconnect?.organization_reference).to.be.a("string").that.is.not.empty;
   });
   
-  console.log("fhirContext:", JSON.stringify(claims.fhirContext));
+  console.log("authorization_details:", JSON.stringify(claims.authorization_details));
   console.log("aud:", JSON.stringify(claims.aud));
   console.log("organization_reference:", claims.extensions?.umzhconnect?.organization_reference);
 }
 
 docs {
-  Placer (hospital_a) requests an L2 token with an RFC 9396 `authorization_details` parameter naming a specific ServiceRequest. The `FhirContextMapper` turns this into a `fhirContext` claim on the token, scoping it to that one resource — this is what powers the context gate exercised in negative/04 and validation/04.
+  Placer (hospital_a) requests an L2 token to read the output of a Task on the Fulfiller's server: the RFC 9396 `authorization_details` parameter names the workflow root `{{taskContextReference}}` (type `http://fhir.ch/ig/ch-umzh-connect/context`). The `umzh-context` client policy stores the context, normalised to `{type, identifier}`, and the built-in session note mapper writes it as a top-level `authorization_details` claim and into the token response. validation/04 uses the token to read the Task's output.
   
   Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }

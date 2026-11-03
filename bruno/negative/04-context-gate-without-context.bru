@@ -15,7 +15,7 @@ auth:bearer {
 }
 
 docs {
-  placerL2Token (auth/06) has the system/ServiceRequest.rs scope but no fhirContext claim, so the context gate must reject the read with 403.
+  placerL2Token (auth/06) has the system/ServiceRequest.rs scope but no context in `authorization_details`. ServiceRequest is context-gated, and the IG requires exactly one context for such requests, so the read is rejected with 403.
 }
 
 assert {

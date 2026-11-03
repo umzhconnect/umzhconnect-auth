@@ -38,3 +38,4 @@ Do **not** write an ADR for implementation details, routine config changes, or d
 | [0002](0002-one-client-per-hospital.md) | One Keycloak client per hospital | Accepted |
 | [0003](0003-constant-ecosystem-audience.md) | Constant ecosystem `aud`, deferring RFC 8707 until Keycloak support matures | Accepted |
 | [0004](0004-reinstate-l1-debug-client.md) | Reinstate L1 as an opt-in per-hospital debug client | Accepted |
+| [0005](0005-context-authorization-details-claim.md) | Carry the context as an RFC 9396 `authorization_details` claim | Accepted |

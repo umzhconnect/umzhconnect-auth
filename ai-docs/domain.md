@@ -1,6 +1,6 @@
 ---
 recap: "FHIR/SMART on FHIR domain context — resources, system scopes, Backend Services auth, and the cross-org referral flow."
-keywords: [FHIR, SMART on FHIR, system scopes, backend services, private_key_jwt, fhirContext, authorization_details, umzh-connect-context, referral flow, Placer, Fulfiller, ServiceRequest, Task, Consent, organization_reference, OPA, Consent.status, meaning=related]
+keywords: [FHIR, SMART on FHIR, system scopes, backend services, private_key_jwt, authorization_details, http://fhir.ch/ig/ch-umzh-connect/context, context-gated, counter-party entitlement, referral flow, Placer, Fulfiller, ServiceRequest, Task, Consent, organization_reference, OPA, Consent.status, meaning=related]
 ---
 
 # Domain context
@@ -20,11 +20,11 @@ Governed by the FHIR IG at `https://build.fhir.org/ig/umzhconnect/umzhconnect-ig
 
 ## SMART on FHIR
 
-**System scopes** — standardized permission language: `system/<ResourceType>.<action>` (e.g. `system/Patient.r`, `system/Task.crus`). The `system/` prefix means M2M — no user logged in.
+**System scopes** — standardized permission language: `system/<ResourceType>.<action>` (e.g. `system/Patient.rs`, `system/Task.crus`). The `system/` prefix means M2M — no user logged in.
 
 **Backend Services** — instead of a client secret, clients authenticate with `private_key_jwt` signed with their private key, validated against registered JWKS. No shared secrets at Level 2.
 
-**fhirContext** — client declares which FHIR resource it's operating in context of; the AS maps this (via `FhirContextMapper`) into a `fhirContext` claim in the issued JWT. The RS uses this for fine-grained authorization.
+**Context (RFC 9396 `authorization_details`)** — the client names the workflow root it is operating in (`ServiceRequest/{id}` on the Placer, `Task/{id}` on the Fulfiller). The AS returns it in the token response and as a top-level `authorization_details` claim (via the `umzh-context` client policy and a session note mapper, see [mapper.md](mapper.md)). A token carries at most one context. The RS requires exactly one for every resource type except `Task` and `Questionnaire`, checks the caller against its own record of the counter-party, and limits the read to the root's context graph.
 
 ## The referral flow
 
@@ -32,17 +32,17 @@ Governed by the FHIR IG at `https://build.fhir.org/ig/umzhconnect/umzhconnect-ig
 Fulfiller → Keycloak:
   POST /token
   grant_type=client_credentials
-  scope=system/ServiceRequest.rs system/Patient.r
-  authorization_details=[{"type":"umzh-connect-context","identifier":"ServiceRequest/sr-123"}]
+  scope=system/ServiceRequest.rs system/Patient.rs
+  authorization_details=[{"type":"http://fhir.ch/ig/ch-umzh-connect/context","identifier":"ServiceRequest/sr-123"}]
   client_assertion=<JWT signed with Fulfiller's private key>
 
 Keycloak issues access token:
   {
     "iss": "https://auth.umzhconnect.ch",
     "aud": "https://fhir.placer.example",    ← target FHIR server URL
-    "scope": "system/ServiceRequest.rs system/Patient.r",
+    "scope": "system/ServiceRequest.rs system/Patient.rs",
     "extensions": { "umzhconnect": { "organization_reference": "..." } },
-    "fhirContext": [{ "reference": "ServiceRequest/sr-123" }]
+    "authorization_details": [{ "type": "http://fhir.ch/ig/ch-umzh-connect/context", "identifier": "ServiceRequest/sr-123" }]
   }
 
 Fulfiller → Placer's FHIR server:
@@ -51,7 +51,8 @@ Fulfiller → Placer's FHIR server:
 
 Placer's policy engine (OPA):
   1. Validate JWT signature and scope
-  2. Look up active Consent for ServiceRequest/sr-123 authorizing this party_id
+  2. Check organization_reference against the counter-party recorded for ServiceRequest/sr-123
+     (ServiceRequest.performer or an active Consent)
   3. Verify requested resource is within the reference graph of sr-123
   → Allow or deny
 ```

@@ -19,12 +19,14 @@ body:json {
     "resourceType": "Task",
     "status": "requested",
     "intent": "order",
-    "focus": { "reference": "{{contextReference}}" }
+    "focus": { "reference": "{{contextReference}}" },
+    "requester": { "reference": "https://fhir.hospital_a.example/fhir/Organization/HospitalA" },
+    "owner": { "reference": "https://fhir.hospital_b.example/fhir/Organization/HospitalB" }
   }
 }
 
 docs {
-  Uses the Placer's L2 token (auth/06) to create a Task, exercising a write scope (`system/Task.crus`) rather than the read scopes used elsewhere in `validation/`. Confirms the validator enforces write permissions per-scope, not just read access. Run auth/06 first.
+  Uses the Placer's L2 token (auth/06) to create a Task, exercising a write scope (`system/Task.crus`) rather than the read scopes used elsewhere in `validation/`. Task is not context-gated, so no context is needed; instead the IG requires `Task.requester` to be the calling organization and `Task.owner` the Fulfiller's own organization (the mock acts as hospital_b). Contrast with negative/17 (foreign requester). Run auth/06 first.
 }
 
 assert {

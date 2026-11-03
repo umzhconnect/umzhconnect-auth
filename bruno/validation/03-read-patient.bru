@@ -1,5 +1,5 @@
 meta {
-  name: Read Patient (scope-gated)
+  name: Read Patient (in the context graph)
   type: http
   seq: 3
 }
@@ -11,11 +11,11 @@ get {
 }
 
 auth:bearer {
-  token: {{placerL2Token}}
+  token: {{fulfillerContextToken}}
 }
 
 docs {
-  Uses the Placer's L2 token (auth/06, no `fhirContext`) to read a Patient resource. auth/06 explicitly requests `system/Patient.r` in its `scope` parameter, so it's present on the token and this succeeds — demonstrates that scope-gated (not context-gated) resources work with a plain L2 token. Contrast with negative/04, where the same token is rejected on a context-gated resource. Run auth/06 first.
+  The Fulfiller reads the Patient referenced by the order, using its context token (auth/08, context `ServiceRequest/sr-123`, scope `system/Patient.rs`). Patient is context-gated (every type except Task and Questionnaire is), so the mock checks all three IG steps: exactly one context, hospital_b is the counter-party recorded for `ServiceRequest/sr-123`, and `Patient/pat-1` is in that root's context graph. Contrast with negative/14 (resource outside the graph). Run auth/08 first.
 }
 
 assert {

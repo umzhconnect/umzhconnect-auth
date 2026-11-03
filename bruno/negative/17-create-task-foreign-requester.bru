@@ -1,0 +1,34 @@
+meta {
+  name: Create Task with a foreign requester (403)
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{validatorUrl}}/fhir/Task
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{placerL2Token}}
+}
+
+body:json {
+  {
+    "resourceType": "Task",
+    "status": "requested",
+    "intent": "order",
+    "focus": { "reference": "{{contextReference}}" },
+    "requester": { "reference": "https://fhir.hospital_c.example/fhir/Organization/HospitalC" },
+    "owner": { "reference": "https://fhir.hospital_b.example/fhir/Organization/HospitalB" }
+  }
+}
+
+docs {
+  IG: on `POST /Task`, `Task.requester.reference` MUST equal `extensions.umzhconnect.organization_reference`. The Placer (hospital_a) names hospital_c as requester, so the mock Fulfiller rejects the create with 403. Contrast with validation/05. Run auth/06 first.
+}
+
+assert {
+  res.status: eq 403
+}

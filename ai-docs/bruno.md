@@ -1,6 +1,6 @@
 ---
 recap: "Bruno collection structure and the mandatory Node.js sandbox switch for L2 requests — QuickJS lacks crypto/fs/path."
-keywords: [Bruno, QuickJS, Node.js sandbox, unsafe, --sandbox unsafe, Developer mode, green shield, l2KeysDir, crypto module, fs module, path module, pre-request scripts, bru run, local environment, private_key_jwt, RFC 7523, L1, client_secret, placerL1ClientId, placerL1ClientSecret, m2m_l1_client_secrets, ADR 0004, docs block, docs tab, folder docs, collection docs, jwks-server, jwksServerUrl, clientId, .well-known, hospital_a-l2.jwks.json, hosted JWKS, jwks.url, hospital_c, generateKeyPairSync, unreachable jwks_url]
+keywords: [Bruno, QuickJS, Node.js sandbox, unsafe, --sandbox unsafe, Developer mode, green shield, l2KeysDir, crypto module, fs module, path module, pre-request scripts, bru run, local environment, private_key_jwt, RFC 7523, L1, client_secret, placerL1ClientId, placerL1ClientSecret, m2m_l1_client_secrets, ADR 0004, docs block, docs tab, folder docs, collection docs, jwks-server, jwksServerUrl, clientId, .well-known, hospital_a-l2.jwks.json, hosted JWKS, jwks.url, hospital_c, generateKeyPairSync, unreachable jwks_url, contextReference, taskContextReference, foreignContextToken, authorization_details, invalid_authorization_details]
 ---
 
 # Bruno collection
@@ -34,6 +34,15 @@ The `unsafe` label is Bruno's terminology for "run scripts in Node.js instead of
 All L2 token requests (`06`, `07`, `08`) get a constant ecosystem `aud` (the realm issuer URL) applied automatically — no `aud:` scope parameter is needed or supported. See [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md).
 
 **Prerequisite**: Terraform must have been applied after the last commit. If you get 401/400 errors, re-run `docker compose up keycloak-config`.
+
+## Context requests and variables
+
+Context tokens send `authorization_details` with type `http://fhir.ch/ig/ch-umzh-connect/context` ([ADR 0005](../docs/adr/0005-context-authorization-details-claim.md)):
+
+- `auth/08` is the Fulfiller's token for `{{contextReference}}` (`ServiceRequest/sr-123`).
+- `auth/05` is the Placer's token for `{{taskContextReference}}` (`Task/task-456`).
+
+Both assert the normalised claim and the token-response `authorization_details`. `negative/08`, `11`, `12`, `13`, `18` and `19` expect 400 `invalid_authorization_details` from the `umzh-context` client policy. `negative/15` stores `foreignContextToken` for `negative/16`. The mock resource server's records (counter-parties, context graphs) are described in [token-validator.md](token-validator.md).
 
 ## Hosted client JWKS (`03-client-hosted-jwks.bru`)
 

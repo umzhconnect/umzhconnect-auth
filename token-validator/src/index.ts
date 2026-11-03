@@ -2,15 +2,15 @@
 //
 // Two faces:
 //   POST /validate          detailed per-check validation report for any token
-//   GET  /fhir/*            sample protected endpoints enforcing the IG rules
-//                           (bearer JWT, SMART system scope, fhirContext gate)
+//   /fhir/*                 sample protected endpoints enforcing the IG rules
+//                           (bearer JWT, SMART system scope, context gate)
 //
 // Dev/test aid only - NOT a production artifact.
 
 import express, { type NextFunction, type Request, type Response } from 'express';
 import type { JWTPayload } from 'jose';
 import { loadConfig } from './config.js';
-import { fhirContextOf, hasSystemScope, validateToken } from './validator.js';
+import { contextsOf, hasSystemScope, organizationReferenceOf, validateToken } from './validator.js';
 
 const config = loadConfig();
 const app = express();
@@ -60,24 +60,70 @@ function requireSystemScope(resource: string, perm: string) {
   };
 }
 
+// --- Mock workflow records --------------------------------------------------
+//
+// Stand-ins for the RS's own records. A real RS is either the Placer or the
+// Fulfiller; this mock holds one workflow root of each so both directions can
+// be exercised. Organization references match keycloak-config/clients/*.yaml.
+
+const HOSPITAL_A = 'https://fhir.hospital_a.example/fhir/Organization/HospitalA'; // Placer
+const HOSPITAL_B = 'https://fhir.hospital_b.example/fhir/Organization/HospitalB'; // Fulfiller
+
 /**
- * IG context gate: the requested resource must be (the root of) the workflow
- * context in the token's fhirContext claim. A real resource server walks the
- * full FHIR reference graph; this mock only matches the root reference.
+ * Per workflow root: the counter-party the RS recorded for it (IG step 2 —
+ * ServiceRequest.performer or a Consent on the Placer, Task.requester on the
+ * Fulfiller) and the resources in its context graph (IG step 3).
  */
-function requireFhirContext(referenceOf: (req: Request) => string) {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    const wanted = referenceOf(req);
-    const context = fhirContextOf(req.claims!);
-    if (!context.some((c) => c.reference === wanted)) {
-      res.status(403).json({
-        error: `resource not in workflow context: token fhirContext does not cover ${wanted}`,
-        fhirContext: context,
-      });
-      return;
-    }
-    next();
-  };
+const WORKFLOW_ROOTS: Record<string, { counterParty: string; graph: string[] }> = {
+  // On the Placer: the Fulfiller reads the order and what it references.
+  'ServiceRequest/sr-123': {
+    counterParty: HOSPITAL_B,
+    graph: ['ServiceRequest/sr-123', 'Patient/pat-1', 'Condition/cond-1'],
+  },
+  // On the Fulfiller: the Placer reads the Task's output.
+  'Task/task-456': {
+    counterParty: HOSPITAL_A,
+    graph: ['DiagnosticReport/report-1'],
+  },
+};
+
+/** Tasks held by the mock Fulfiller (HOSPITAL_B). */
+const TASKS: Record<string, { requester: string; owner: string }> = {
+  'task-456': { requester: HOSPITAL_A, owner: HOSPITAL_B },
+};
+
+/**
+ * IG context gate for context-gated resources (every type except Task and
+ * Questionnaire). The token must carry exactly one context, the caller must
+ * be the counter-party recorded for its root, and the requested resource must
+ * be in the root's context graph. A real RS resolves the graph from its FHIR
+ * data; this mock uses WORKFLOW_ROOTS.
+ */
+function requireContext(req: Request, res: Response, next: NextFunction): void {
+  const resource = `${req.params.type}/${req.params.id}`;
+  const contexts = contextsOf(req.claims!);
+  if (contexts.length !== 1) {
+    res.status(403).json({
+      error: `context-gated resource ${resource} requires exactly one context in authorization_details`,
+      contexts,
+    });
+    return;
+  }
+  const root = contexts[0].identifier ?? '';
+  const record = WORKFLOW_ROOTS[root];
+  const caller = organizationReferenceOf(req.claims!);
+  if (!record || record.counterParty !== caller) {
+    res.status(403).json({
+      error: `calling organization is not the recorded counter-party of ${root}`,
+      organization_reference: caller,
+    });
+    return;
+  }
+  if (!record.graph.includes(resource)) {
+    res.status(403).json({ error: `${resource} is not in the context graph of ${root}` });
+    return;
+  }
+  next();
 }
 
 // --- Routes -------------------------------------------------------------------
@@ -97,32 +143,48 @@ app.post('/validate', async (req, res) => {
   res.status(report.valid ? 200 : 422).json(report);
 });
 
-// Non-context-gated read (IG: directory/definitional resources).
-app.get('/fhir/Organization/:id', requireAuth, requireSystemScope('Organization', 'r'), (req, res) => {
-  res.json({ resourceType: 'Organization', id: req.params.id, name: `Mock Organization ${req.params.id}` });
+// Questionnaire: definitional content, not context-gated — scope only.
+app.get('/fhir/Questionnaire/:id', requireAuth, requireSystemScope('Questionnaire', 'r'), (req, res) => {
+  res.json({ resourceType: 'Questionnaire', id: req.params.id, status: 'active' });
 });
 
-// Patient read: scope-gated only in this mock (real servers also enforce
-// graph membership from the fhirContext root).
-app.get('/fhir/Patient/:id', requireAuth, requireSystemScope('Patient', 'r'), (req, res) => {
-  res.json({ resourceType: 'Patient', id: req.params.id, name: [{ family: 'Mock', given: ['Patient'] }] });
+// Task read: not context-gated; the caller must be Task.requester.
+app.get('/fhir/Task/:id', requireAuth, requireSystemScope('Task', 'r'), (req, res) => {
+  const task = TASKS[req.params.id];
+  if (!task) {
+    res.status(404).json({ error: `Task/${req.params.id} not found` });
+    return;
+  }
+  if (task.requester !== organizationReferenceOf(req.claims!)) {
+    res.status(403).json({ error: 'calling organization is not Task.requester' });
+    return;
+  }
+  res.json({ resourceType: 'Task', id: req.params.id, status: 'requested', intent: 'order',
+    requester: { reference: task.requester }, owner: { reference: task.owner } });
 });
 
-// ServiceRequest read: scope + context gate (the workflow root itself).
-app.get(
-  '/fhir/ServiceRequest/:id',
-  requireAuth,
-  requireSystemScope('ServiceRequest', 'r'),
-  requireFhirContext((req) => `ServiceRequest/${req.params.id}`),
-  (req, res) => {
-    res.json({ resourceType: 'ServiceRequest', id: req.params.id, status: 'active', intent: 'order' });
-  },
-);
-
-// Task create: requires the create permission.
+// Task create: not context-gated; Task.requester must be the caller and
+// Task.owner this (Fulfiller) server's own organization.
 app.post('/fhir/Task', requireAuth, requireSystemScope('Task', 'c'), (req, res) => {
+  if (req.body?.requester?.reference !== organizationReferenceOf(req.claims!)) {
+    res.status(403).json({ error: 'Task.requester must be the calling organization' });
+    return;
+  }
+  if (req.body?.owner?.reference !== HOSPITAL_B) {
+    res.status(403).json({ error: `Task.owner must be this server's organization (${HOSPITAL_B})` });
+    return;
+  }
   res.status(201).json({ resourceType: 'Task', id: 'mock-task-1', status: 'requested', ...req.body });
 });
+
+// Every other resource type is context-gated: scope + context gate.
+app.get('/fhir/:type/:id', requireAuth,
+  (req, res, next) => requireSystemScope(req.params.type, 'r')(req, res, next),
+  requireContext,
+  (req, res) => {
+    res.json({ resourceType: req.params.type, id: req.params.id });
+  },
+);
 
 app.listen(config.port, () => {
   console.log(`token-validator listening on :${config.port}`);

@@ -1,11 +1,11 @@
 meta {
-  name: Read Organization without requesting the scope (403)
+  name: Read Questionnaire without requesting the scope (403)
   type: http
   seq: 3
 }
 
 get {
-  url: {{validatorUrl}}/fhir/Organization/org-1
+  url: {{validatorUrl}}/fhir/Questionnaire/q-1
   body: none
   auth: bearer
 }
@@ -15,7 +15,7 @@ auth:bearer {
 }
 
 docs {
-  placerL2Token (auth/06) requests `system/Task.crus system/ServiceRequest.rs system/Patient.r` — not `system/Organization.r`. No scope is ever included in a token unless explicitly requested (scopes.yaml registers every scope as optional, none as default), so this token has no `system/Organization.r` and the read is rejected. Run auth/06 first to obtain placerL2Token.
+  placerL2Token (auth/06) requests `system/Task.crus system/ServiceRequest.rs system/Patient.rs` — not `system/Questionnaire.rs`. No scope is ever included in a token unless explicitly requested (scopes.yaml registers every scope as optional, none as default), so the read is rejected. Questionnaire is used because it is not context-gated: the token needs no context, so the 403 can only come from the scope check. (Organization was used before; cross-domain Organization data comes from the public registry, so the mock no longer serves it.) Run auth/06 first to obtain placerL2Token.
 }
 
 assert {

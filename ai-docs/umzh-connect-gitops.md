@@ -30,7 +30,7 @@ repo — see "Why the gitops repo is separate" below for why.
 ## Goal
 
 Stand up a **dev-only**, non-persistent-in-spirit Kubernetes deployment of
-this repo's stack (Keycloak + FhirContextMapper, the Terraform realm config,
+this repo's stack (Keycloak + the UMZH context mapper/executor, the Terraform realm config,
 jwks-server, token-validator) on the shared dev cluster, wired through
 ArgoCD, following the conventions in `tch-syseng-argocd-gitops`.
 

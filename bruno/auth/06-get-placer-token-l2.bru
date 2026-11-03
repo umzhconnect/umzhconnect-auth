@@ -15,11 +15,11 @@ body:form-urlencoded {
   client_id: {{placerClientId}}
   client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
   client_assertion: {{placerClientAssertion}}
-  scope: system/Task.crus system/ServiceRequest.rs system/Patient.r
+  scope: system/Task.crus system/ServiceRequest.rs system/Patient.rs
 }
 
 docs {
-  Canonical L2 happy path: Placer (hospital_a) authenticates with `private_key_jwt` (RFC 7523) and receives an access token with no `authorization_details` — no `fhirContext` claim, just the requested default/system scopes. `placerL2Token` is reused by several validation/negative requests that don't need FHIR-context binding.
+  Canonical L2 happy path: Placer (hospital_a) authenticates with `private_key_jwt` (RFC 7523) and receives an access token with no `authorization_details` — no context in the token, just the requested system scopes. `placerL2Token` is reused by validation/negative requests for Task (not context-gated) and to show that context-gated reads are refused without a context.
 
   Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
 }

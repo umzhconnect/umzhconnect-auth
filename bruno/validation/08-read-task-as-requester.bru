@@ -1,0 +1,24 @@
+meta {
+  name: Read Task as its requester (no context needed)
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{validatorUrl}}/fhir/Task/task-456
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{placerL2Token}}
+}
+
+docs {
+  Task is not context-gated (IG security.md §Counter-party entitlement), so the Placer reads its Task with a plain L2 token (auth/06, no `authorization_details`). Instead of a context, the mock Fulfiller checks that the calling organization is `Task.requester`. Run auth/06 first.
+}
+
+assert {
+  res.status: eq 200
+  res.body.resourceType: eq Task
+}

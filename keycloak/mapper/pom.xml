@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.umzhconnect</groupId>
-    <artifactId>umzh-fhir-context-mapper</artifactId>
+    <artifactId>umzh-context-mapper</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
