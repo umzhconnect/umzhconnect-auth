@@ -1,0 +1,60 @@
+meta {
+  name: Inline JWKS client, assertion signed with wrong key (400)
+  type: http
+  seq: 20
+}
+
+post {
+  url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  grant_type: client_credentials
+  client_id: {{inlineJwksClientId}}
+  client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+  client_assertion: {{inlineJwksWrongKeyAssertion}}
+  scope: system/Patient.rs
+}
+
+docs {
+  Counterpart to `auth/10-get-token-inline-jwks.bru`: claims to be `hospital_e-l2` (inline JWKS client, ADR 0006) and uses that client's `kid`, but signs with hospital_a's demo key (`keys/hospital_a-l2.key`). Keycloak must verify against the key set stored on the client — not trust the caller — so the signature check fails and no token is issued.
+
+  Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
+}
+
+assert {
+  res.status: eq 400
+  res.body.access_token: isUndefined
+}
+
+script:pre-request {
+  const crypto = require("crypto");
+  const fs = require("fs");
+  const path = require("path");
+
+  const keysDir = bru.getEnvVar("l2KeysDir") || path.resolve(bru.cwd(), "..", "keys");
+  const pem = fs.readFileSync(path.join(keysDir, "hospital_a-l2.key"), "utf8"); // not hospital_e's key
+
+  const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+  const tokenEndpoint = `${bru.getEnvVar("keycloakUrl")}/realms/${bru.getEnvVar("realm")}/protocol/openid-connect/token`;
+
+  const clientId = bru.getEnvVar("inlineJwksClientId");
+  const header = { alg: "RS256", typ: "JWT", kid: "hospital_e-l2" };
+  const payload = {
+    iss: clientId,
+    sub: clientId,
+    aud: tokenEndpoint,
+    exp: now + 60,
+    jti: crypto.randomUUID(),
+  };
+
+  const signingInput = `${b64url(header)}.${b64url(payload)}`;
+  const signature = crypto
+    .sign("RSA-SHA256", Buffer.from(signingInput), pem)
+    .toString("base64url");
+
+  bru.setVar("inlineJwksWrongKeyAssertion", `${signingInput}.${signature}`);
+}

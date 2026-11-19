@@ -1,6 +1,6 @@
 ---
 recap: "YAML-driven config model — client_id-keyed config files under keycloak-config/clients/ (plus keycloak-config/scopes.yaml) that drive KC client generation via Terraform. Whether a file is L1 or L2 is determined by its own auth_level field, not by directory. Filenames are a convention only; client_id and auth_level in the file content are what Terraform actually reads."
-keywords: [keycloak-config/clients, keycloak-config/scopes.yaml, client_id, auth_level, enabled, fhir_url, jwks_url, organization_reference, client_name, optional_scopes, least privilege per request, scopes.tf, clients.tf, ecosystem-audience-mapper, onboarding, terraform apply, terraform_data client_config_guard, lifecycle precondition, ADR 0002, ADR 0003, ADR 0004]
+keywords: [keycloak-config/clients, keycloak-config/scopes.yaml, client_id, auth_level, enabled, fhir_url, jwks_url, jwks, inline JWKS, jwks.string, organization_reference, client_name, optional_scopes, least privilege per request, scopes.tf, clients.tf, ecosystem-audience-mapper, onboarding, terraform apply, terraform_data client_config_guard, lifecycle precondition, YAML 1.1 boolean keys, key rotation, hospital_e-l2, ADR 0002, ADR 0003, ADR 0004, ADR 0006]
 ---
 
 # Config model
@@ -23,6 +23,7 @@ keycloak-config/
 Terraform reads every file in `keycloak-config/clients/` into `local.clients_by_id` (keyed by `client_id`), then splits it by each file's own `auth_level` field: `local.clients_l2` (`auth_level: "L2"`) and `local.clients_l1_all` (`auth_level: "L1"`). Two repo-wide invariants are enforced as `lifecycle.precondition` blocks on a no-op `resource "terraform_data" "client_config_guard"` (`clients.tf`) — a resource precondition hard-fails `terraform apply`, unlike a `check` block assertion, which only warns:
 - No two files may share a `client_id`.
 - Every file's `auth_level` must be `"L1"` or `"L2"` — a typo'd value would otherwise silently match neither filter and be ignored with no error.
+- Every L2 file sets exactly one of `jwks_url` / `jwks`, and an inline `jwks` passes the checks in [Inline JWKS](#inline-jwks-jwks) below.
 
 ---
 
@@ -45,9 +46,34 @@ auth_level: "L2"
 | `client_name` | Human label shown in KC admin |
 | `organization_reference` | `Organization` FHIR reference — embedded in every token as `extensions.umzhconnect.organization_reference` |
 | `fhir_url` | Base URL of this hospital's FHIR server. Not currently written into `aud` — see [ADR 0003](../docs/adr/0003-constant-ecosystem-audience.md) (`aud` is a constant ecosystem value, not per-hospital) |
-| `jwks_url` | Public JWKS endpoint KC uses to verify `private_key_jwt` assertions. Independent of `client_id` — see the local demo setup in `keys/README.md` |
+| `jwks_url` | Public JWKS endpoint KC uses to verify `private_key_jwt` assertions. Independent of `client_id` — see the local demo setup in `keys/README.md`. Mutually exclusive with `jwks` |
+| `jwks` | Alternative to `jwks_url`: the hospital's **public** JWK Set inlined as a YAML map (`keys: [...]`), stored on the KC client as `jwks.string`. For hospitals that can't host a JWKS endpoint. See [Inline JWKS](#inline-jwks-jwks) and [ADR 0006](../docs/adr/0006-inline-client-jwks.md) |
 | `auth_level` | Must be `"L2"` for an L2 file. Written straight through into the `extensions.umzhconnect.auth_level` claim (no case conversion). This field (not the directory or filename) is what Terraform uses to route the file into `local.clients_l2`; the `terraform_data.client_config_guard` precondition (`clients.tf`) hard-fails `terraform apply` if any file's `auth_level` is neither `"L1"` nor `"L2"` |
 | `enabled` | Optional, defaults to `true` if absent. Maps straight to KC's client-level `enabled` flag (`try(each.value.enabled, true)` in `clients.tf`) — distinct from `access_type`/`client_authenticator_type`. Set `enabled: false` to temporarily block a client from obtaining tokens without deleting the file or touching its credentials; flip back to `true` (or remove the line) to re-enable |
+
+### Inline JWKS (`jwks`)
+
+Set `jwks` instead of `jwks_url` when the hospital can't publish a JWKS endpoint Keycloak can reach ([ADR 0006](../docs/adr/0006-inline-client-jwks.md)). Example: `keycloak-config/clients/hospital_e-l2.yaml`.
+
+```yaml
+jwks:
+  keys:
+    - "kty": "RSA"
+      "use": "sig"
+      "alg": "RS256"
+      "kid": "hospital_e-l2"
+      "e": "AQAB"
+      "n": "xm6lGEu12pwD..."
+```
+
+`terraform_data.client_config_guard` hard-fails the apply when:
+
+- an L2 file sets both `jwks_url` and `jwks`, or neither;
+- `jwks.keys` is missing or empty, a key lacks `kty` or `kid`, or two keys share a `kid`;
+- a JWK member name decoded as a boolean. Terraform's `yamldecode` is YAML 1.1, so an unquoted `n:` / `y:` key becomes `false` / `true`. **Quote all member names**;
+- a key carries private or symmetric material (`d`, `p`, `q`, `dp`, `dq`, `qi`, `oth`, `k`).
+
+Rotation is an operator change: add the new key with a **new `kid`** and apply, wait for the hospital to switch, then remove the old key and apply. Keycloak picks up the change on apply without a restart. Never reuse a `kid` for new key material, because Keycloak caches client keys by `kid`.
 
 Terraform creates one KC client per file:
 - `{client_id}` — the M2M client (L2 `private_key_jwt`, service account enabled)
@@ -99,7 +125,7 @@ To add a scope: add an entry to `keycloak-config/scopes.yaml` and run `terraform
 
 ## Onboarding a hospital
 
-1. Create `keycloak-config/clients/{client_id}.yaml` with `client_id`, `client_name`, `organization_reference`, `fhir_url`, `jwks_url`, and `auth_level: "L2"`.
+1. Create `keycloak-config/clients/{client_id}.yaml` with `client_id`, `client_name`, `organization_reference`, `fhir_url`, either `jwks_url` or an inline `jwks`, and `auth_level: "L2"`.
 2. Run `terraform apply`.
 
 ---

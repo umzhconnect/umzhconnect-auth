@@ -18,6 +18,41 @@ auth_level: "L2"
 
 `auth_level` must be `"L2"`; Terraform fails the apply if it isn't.
 
+### Inline JWKS instead of `jwks_url`
+
+For a hospital that can't host a JWKS endpoint Keycloak can reach, register
+its **public** key set inline with `jwks` instead of `jwks_url`
+([ADR 0006](../../docs/adr/0006-inline-client-jwks.md)). Set exactly one of
+the two fields.
+
+```yaml
+client_id: "hospital_e-l2"
+client_name: "Hospital E"
+organization_reference: "https://fhir.hospital_e.example/fhir/Organization/HospitalE"
+fhir_url: "https://fhir.hospital_e.example/fhir"
+auth_level: "L2"
+jwks:
+  keys:
+    - "kty": "RSA"
+      "use": "sig"
+      "alg": "RS256"
+      "kid": "hospital_e-l2"
+      "e": "AQAB"
+      "n": "xm6lGEu12pwD..."
+```
+
+- **Quote the JWK member names.** Terraform reads YAML 1.1, where an
+  unquoted `n:` or `y:` key becomes the boolean `false` / `true`. Terraform
+  fails the apply when that happens.
+- **Public keys only.** The apply fails if a key contains `d`, `p`, `q`,
+  `dp`, `dq`, `qi`, `oth` or `k`. If that happens, the private key has been
+  exposed and must be replaced, not just removed from the file.
+- Every key needs `kty` and a unique `kid`. Include `use: "sig"` and `alg`
+  as well.
+- **Rotation:** add the new key with a **new `kid`** next to the old one and
+  apply. Once the hospital signs with the new key, remove the old one and
+  apply again. Never reuse a `kid` for different key material.
+
 ## L1 (`client_secret`) — opt-in debug client
 
 Provisions an **L1 (`client_secret`) debug client** for a hospital. See
@@ -37,7 +72,7 @@ auth_level: "L1"
 ```
 
 `auth_level` must be `"L1"`; Terraform fails the apply if it isn't (a
-copy-pasted `"L2"` file dropped in here, for example). No `jwks_url` — L1
+copy-pasted `"L2"` file dropped in here, for example). No `jwks_url` / `jwks` — L1
 authenticates with a Keycloak-generated `client_secret`, not
 `private_key_jwt`. L1 clients are also gated by `var.allow_l1_debug_clients`
 (default `false`) — an L1 file present without that opt-in is ignored (with

@@ -1,0 +1,60 @@
+meta {
+  name: Get Token (L2, inline JWKS — hospital_e)
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  grant_type: client_credentials
+  client_id: {{inlineJwksClientId}}
+  client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+  client_assertion: {{inlineJwksClientAssertion}}
+  scope: system/Patient.rs
+}
+
+docs {
+  L2 `private_key_jwt` for a hospital whose public key is registered **inline** in its client YAML (`jwks:` map → Keycloak `jwks.string`) instead of fetched from a hosted `jwks_url` — the path for hospitals that can't expose a JWKS endpoint of their own (ADR 0006). Same RFC 7523 assertion as `06-get-placer-token-l2.bru`, signed with the demo key `keys/hospital_e-l2.key`; Keycloak verifies it against the stored key set, with no outbound fetch. The token is indistinguishable from one issued to a `jwks_url` client.
+
+  Requires Bruno developer mode (unsafe sandbox) for crypto/fs/path.
+}
+
+assert {
+  res.status: eq 200
+  res.body.access_token: isDefined
+}
+
+script:pre-request {
+  const crypto = require("crypto");
+  const fs = require("fs");
+  const path = require("path");
+
+  const keysDir = bru.getEnvVar("l2KeysDir") || path.resolve(bru.cwd(), "..", "keys");
+  const pem = fs.readFileSync(path.join(keysDir, "hospital_e-l2.key"), "utf8");
+
+  const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+  const tokenEndpoint = `${bru.getEnvVar("keycloakUrl")}/realms/${bru.getEnvVar("realm")}/protocol/openid-connect/token`;
+
+  const clientId = bru.getEnvVar("inlineJwksClientId");
+  const header = { alg: "RS256", typ: "JWT", kid: "hospital_e-l2" };
+  const payload = {
+    iss: clientId,
+    sub: clientId,
+    aud: tokenEndpoint,
+    exp: now + 60,
+    jti: crypto.randomUUID(),
+  };
+
+  const signingInput = `${b64url(header)}.${b64url(payload)}`;
+  const signature = crypto
+    .sign("RSA-SHA256", Buffer.from(signingInput), pem)
+    .toString("base64url");
+
+  bru.setVar("inlineJwksClientAssertion", `${signingInput}.${signature}`);
+}
