@@ -15,6 +15,7 @@ just needs to match the `jwks_url` configured for that client.
 |------|---------|
 | `hospital_a-l2.key` / `hospital_b-l2.key` | RSA-2048 private keys the Level 2 clients use to sign `private_key_jwt` client assertions (RFC 7523) |
 | `.well-known/hospital_a-l2.jwks.json` / `.well-known/hospital_b-l2.jwks.json` | Matching public JWKS; Keycloak fetches these via each client's `jwks.url` to verify assertions |
+| `hospital_e-l2.key` | RSA-2048 private key for the inline-JWKS demo client ([ADR 0006](../docs/adr/0006-inline-client-jwks.md)). Generated for this repo, not from the sandbox. Its public half is inlined in `keycloak-config/clients/hospital_e-l2.yaml` (`jwks:`), so there is deliberately no `.well-known/hospital_e-l2.jwks.json` |
 
 Public JWKS live under `.well-known/` so they can be served at the
 conventional `/.well-known/{hospital_name}.jwks.json` path. The private `.key`

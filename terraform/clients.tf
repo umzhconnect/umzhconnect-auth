@@ -52,6 +52,52 @@ locals {
   # opt-in is silently ignored (with a warning) rather than provisioned or
   # failing the apply. See the "L1 debug clients" section below.
   clients_l1 = var.allow_l1_debug_clients ? local.clients_l1_all : {}
+
+  # L2 public-key source (ADR 0006): each L2 file sets exactly one of
+  #   jwks_url — KC fetches the hospital's hosted JWKS (default), or
+  #   jwks     — the hospital's public JWKS inlined as a YAML map, for
+  #              hospitals that can't expose a JWKS endpoint of their own.
+  # The guard below enforces "exactly one" and validates inline key sets.
+  _l2_jwks_source_invalid = [
+    for k, c in local.clients_l2 : k
+    if(try(c.jwks_url, null) == null) == (try(c.jwks, null) == null)
+  ]
+  _l2_inline_jwks = { for k, c in local.clients_l2 : k => c.jwks if try(c.jwks, null) != null }
+
+  # JWK members that only exist on private / symmetric keys (RFC 7518 §6).
+  # Their presence means someone pasted a private key into git.
+  _jwk_private_members = ["d", "p", "q", "dp", "dq", "qi", "oth", "k"]
+
+  # Inline JWKS must be {keys: [...]} with at least one key, each key an
+  # object with non-empty kty and kid, and kids unique within the set (KC
+  # selects the verification key by the assertion's kid header).
+  _inline_jwks_malformed = [
+    for k, j in local._l2_inline_jwks : k
+    if !try(
+      length(j.keys) > 0 &&
+      alltrue([for key in j.keys : length(key.kty) > 0 && length(key.kid) > 0]) &&
+      length(distinct([for key in j.keys : key.kid])) == length(j.keys),
+      false
+    )
+  ]
+  # Terraform's yamldecode follows YAML 1.1, where an unquoted "n" / "y"
+  # mapping key decodes as boolean false / true — silently renaming the RSA
+  # modulus (n) and the EC y-coordinate (y). JWK member names must therefore
+  # be quoted in the YAML ("n": ...). Catch the unquoted form explicitly.
+  _inline_jwks_unquoted_members = [
+    for k, j in local._l2_inline_jwks : k
+    if anytrue([
+      for key in try(j.keys, []) :
+      length(setintersection(try(keys(key), []), ["true", "false"])) > 0
+    ])
+  ]
+  _inline_jwks_with_private_parts = [
+    for k, j in local._l2_inline_jwks : k
+    if anytrue([
+      for key in try(j.keys, []) :
+      length(setintersection(try(keys(key), []), local._jwk_private_members)) > 0
+    ])
+  ]
 }
 
 # Repo-wide keycloak-config/clients/*.yaml invariants that must hard-fail the apply.
@@ -77,6 +123,29 @@ resource "terraform_data" "client_config_guard" {
     precondition {
       condition     = alltrue([for k, c in local.clients_by_id : contains(["L1", "L2"], c.auth_level)])
       error_message = "keycloak-config/clients/ contains file(s) with an auth_level other than \"L1\" or \"L2\": ${join(", ", [for k, c in local.clients_by_id : "${k}=\"${c.auth_level}\"" if !contains(["L1", "L2"], c.auth_level)])}."
+    }
+
+    # An L2 client with neither key source can never authenticate; one with
+    # both is ambiguous about which KC actually uses. See ADR 0006.
+    precondition {
+      condition     = length(local._l2_jwks_source_invalid) == 0
+      error_message = "L2 client(s) must set exactly one of jwks_url or jwks (inline JWKS map): ${join(", ", local._l2_jwks_source_invalid)}."
+    }
+
+    precondition {
+      condition     = length(local._inline_jwks_malformed) == 0
+      error_message = "Inline jwks for client(s) ${join(", ", local._inline_jwks_malformed)} is malformed: it must be a map with a non-empty \"keys\" list, every key needs non-empty \"kty\" and \"kid\", and kids must be unique within the set."
+    }
+
+    precondition {
+      condition     = length(local._inline_jwks_unquoted_members) == 0
+      error_message = "Inline jwks for client(s) ${join(", ", local._inline_jwks_unquoted_members)} has JWK member names that YAML decoded as booleans (an unquoted n: or y: key becomes false / true). Quote the member names, e.g. \"n\": \"...\" and \"y\": \"...\"."
+    }
+
+    # Inline JWKS lives in git — refuse anything that isn't a public key.
+    precondition {
+      condition     = length(local._inline_jwks_with_private_parts) == 0
+      error_message = "Inline jwks for client(s) ${join(", ", local._inline_jwks_with_private_parts)} contains private or symmetric key material (one of: ${join(", ", local._jwk_private_members)}). Only public keys may be registered — remove the key and rotate it, it has been exposed."
     }
   }
 }
@@ -110,12 +179,23 @@ resource "keycloak_openid_client" "m2m" {
 
   client_authenticator_type = "client-jwt"
 
-  extra_config = {
-    "use.jwks.url" = "true"
-    "jwks.url"     = each.value.jwks_url
-    # RFC 9068 §2.1 — JWT access token header "typ" must be "at+jwt".
-    "access.token.header.type.rfc9068" = "true"
-  }
+  # Public-key source (ADR 0006): jwks_url → KC fetches the hosted JWKS;
+  # jwks → the inline key set is stored as the client's "jwks.string".
+  # Both use.* flags are always written, so switching a client between modes
+  # can't leave the old flag on. Only the active value is written: KC drops
+  # empty attributes, so blanking the unused one ("") would show as a diff on
+  # every plan. A stale leftover value is inert once its flag is "false".
+  extra_config = merge(
+    {
+      "use.jwks.url"    = try(each.value.jwks, null) == null ? "true" : "false"
+      "use.jwks.string" = try(each.value.jwks, null) == null ? "false" : "true"
+      # RFC 9068 §2.1 — JWT access token header "typ" must be "at+jwt".
+      "access.token.header.type.rfc9068" = "true"
+    },
+    try(each.value.jwks, null) == null
+    ? { "jwks.url" = each.value.jwks_url }
+    : { "jwks.string" = jsonencode(each.value.jwks) },
+  )
 }
 
 # ---------------------------------------------------------------------------
