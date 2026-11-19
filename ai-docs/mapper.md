@@ -48,4 +48,4 @@ The grant does fire the client-policy event `SERVICE_ACCOUNT_TOKEN_REQUEST`, and
 
 **The policy is required for every context.** If the `umzh-context` profile or policy is missing, tokens carry no context at all and nothing is logged; context-gated reads then fail with 403. This fails closed, and Bruno `auth/05` and `auth/08` catch it.
 
-**The design depends on event order:** the event must fire before the token is built. This holds on Keycloak 26.7.2 and 26.8.1. Re-run Bruno on every Keycloak upgrade.
+**The design depends on event order:** the event must fire before the token is built. This holds on Keycloak 26.7.2, 26.8.1 and 26.8.2. Re-run Bruno on every Keycloak upgrade.
