@@ -3,6 +3,11 @@
 # files. Baked-in files land under /src; the Job copies them onto its
 # tfstate-persisting PVC before running terraform, so this image can be
 # treated as read-only/immutable at every sync.
+#
+# Only the Terraform module and the default scopes.yaml are baked in. Client
+# files (keycloak-config/clients/) are NOT: the ones in this repo are demo
+# clients (some with committed private keys), and real clients are seeded by
+# the deployment repo's configurator image layered on top of this one.
 FROM hashicorp/terraform:1.15
 COPY terraform /src/terraform
-COPY keycloak-config /src/keycloak-config
+COPY keycloak-config/scopes.yaml /src/keycloak-config/scopes.yaml

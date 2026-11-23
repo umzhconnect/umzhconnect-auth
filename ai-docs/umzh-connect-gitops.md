@@ -66,7 +66,12 @@ images** and the gitops repo's manifests reference them by tag — exactly
 like `keycloak`/`token-validator` already were:
 
 - **`tf-config`** (`tf-config/Dockerfile`, `FROM hashicorp/terraform:1.15`) —
-  `COPY terraform /src/terraform`, `COPY keycloak-config /src/keycloak-config`.
+  `COPY terraform /src/terraform`, `COPY keycloak-config/scopes.yaml /src/keycloak-config/scopes.yaml`.
+  No client files: `keycloak-config/clients/` in this repo holds demo clients
+  only (some with private keys committed under `keys/`), and Docker `COPY`
+  in a layered configurator merges rather than replaces, so anything baked
+  here would be provisioned in every deployment built on top of it. Real
+  clients come solely from the deployment repo's configurator layer.
   The `keycloak-config` Job copies `/src/*` onto its `tf-workspace` PVC before
   running `terraform apply`, so `terraform.tfstate` still persists across Job
   re-runs even though the image itself is immutable per tag.
@@ -77,9 +82,10 @@ like `keycloak`/`token-validator` already were:
   files that live directly under `keys/` — enforced by directory boundary
   at the Dockerfile level, not a curated ConfigMap file list.
 
-Because the whole `config` directory is baked in via `COPY`, there's
-no manually-curated file list that can omit a file by mistake — onboarding a
-new file is always a single point of edit (add it, rebuild the image).
+Onboarding a client is a single point of edit in the deployment repo: add
+its YAML under the configurator's `keycloak-config/clients/` and rebuild that
+image. `scopes.yaml` is baked here as the default; a configurator that ships
+its own `scopes.yaml` replaces it.
 
 ### The gitops repo's own configurator layer
 
