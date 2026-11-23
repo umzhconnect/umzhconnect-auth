@@ -49,8 +49,10 @@ jwks:
 - **Public keys only.** The apply fails if a key contains `d`, `p`, `q`,
   `dp`, `dq`, `qi`, `oth` or `k`. If that happens, the private key has been
   exposed and must be replaced, not just removed from the file.
-- Every key needs `kty` and a unique `kid`. Include `use: "sig"` and `alg`
-  as well.
+- Every key needs `kty`, a unique `kid` and `"use": "sig"`; include `alg`
+  as well. `use` is optional in RFC 7517, and a hosted JWKS works without
+  it, but Keycloak ignores inline keys that lack it. The apply fails
+  instead, so add `"use": "sig"` when copying a hosted JWKS inline.
 - **Rotation:** add the new key with a **new `kid`** next to the old one and
   apply. Once the hospital signs with the new key, remove the old one and
   apply again. Never reuse a `kid` for different key material.

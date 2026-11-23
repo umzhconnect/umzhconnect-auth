@@ -47,8 +47,12 @@ there's nothing that can contradict it. `terraform_data.client_config_guard`
 hard-fails the apply if:
 
 1. an L2 client sets both or neither field,
-2. the inline set isn't a non-empty `keys` list where every key has `kty`
-   and `kid`, with unique `kid`s,
+2. the inline set isn't a non-empty `keys` list where every key has `kty`,
+   `kid` and `use: "sig"`, with unique `kid`s. `use` is required although
+   RFC 7517 makes it optional: Keycloak loads `jwks.string` keys with
+   `JWKSUtils.getKeyWrappersForUse(jwks, SIG)`, which skips keys without
+   `use` (unlike `jwks.url`, where they count as `sig`), so the client would
+   otherwise fail at token time with a generic `invalid_client`,
 3. a JWK member name was decoded as a boolean. Terraform's `yamldecode`
    follows YAML 1.1, so an unquoted `n:` / `y:` key (the RSA modulus, the EC
    y-coordinate) becomes `false` / `true`. Member names must be quoted.

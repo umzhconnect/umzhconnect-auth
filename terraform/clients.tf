@@ -69,13 +69,17 @@ locals {
   _jwk_private_members = ["d", "p", "q", "dp", "dq", "qi", "oth", "k"]
 
   # Inline JWKS must be {keys: [...]} with at least one key, each key an
-  # object with non-empty kty and kid, and kids unique within the set (KC
-  # selects the verification key by the assertion's kid header).
+  # object with non-empty kty and kid and use = "sig", and kids unique within
+  # the set (KC selects the verification key by the assertion's kid header).
+  # use is mandatory here although RFC 7517 makes it optional: KC loads
+  # jwks.string with JWKSUtils.getKeyWrappersForUse(jwks, SIG), which skips
+  # keys without use (logged only at DEBUG), so the client would fail with a
+  # generic invalid_client. jwks.url keys without use are accepted as sig.
   _inline_jwks_malformed = [
     for k, j in local._l2_inline_jwks : k
     if !try(
       length(j.keys) > 0 &&
-      alltrue([for key in j.keys : length(key.kty) > 0 && length(key.kid) > 0]) &&
+      alltrue([for key in j.keys : length(key.kty) > 0 && length(key.kid) > 0 && try(key.use, "") == "sig"]) &&
       length(distinct([for key in j.keys : key.kid])) == length(j.keys),
       false
     )
@@ -134,7 +138,7 @@ resource "terraform_data" "client_config_guard" {
 
     precondition {
       condition     = length(local._inline_jwks_malformed) == 0
-      error_message = "Inline jwks for client(s) ${join(", ", local._inline_jwks_malformed)} is malformed: it must be a map with a non-empty \"keys\" list, every key needs non-empty \"kty\" and \"kid\", and kids must be unique within the set."
+      error_message = "Inline jwks for client(s) ${join(", ", local._inline_jwks_malformed)} is malformed: it must be a map with a non-empty \"keys\" list, every key needs non-empty \"kty\" and \"kid\" and \"use\": \"sig\" (Keycloak ignores inline keys without use), and kids must be unique within the set."
     }
 
     precondition {

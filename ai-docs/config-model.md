@@ -1,6 +1,6 @@
 ---
 recap: "YAML-driven config model — client_id-keyed config files under keycloak-config/clients/ (plus keycloak-config/scopes.yaml) that drive KC client generation via Terraform. Whether a file is L1 or L2 is determined by its own auth_level field, not by directory. Filenames are a convention only; client_id and auth_level in the file content are what Terraform actually reads."
-keywords: [keycloak-config/clients, keycloak-config/scopes.yaml, client_id, auth_level, enabled, fhir_url, jwks_url, jwks, inline JWKS, jwks.string, organization_reference, client_name, optional_scopes, least privilege per request, scopes.tf, clients.tf, ecosystem-audience-mapper, onboarding, terraform apply, terraform_data client_config_guard, lifecycle precondition, YAML 1.1 boolean keys, unquoted kid timestamp, key rotation, hospital_e-l2, ADR 0002, ADR 0003, ADR 0004, ADR 0006]
+keywords: [keycloak-config/clients, keycloak-config/scopes.yaml, client_id, auth_level, enabled, fhir_url, jwks_url, jwks, inline JWKS, jwks.string, organization_reference, client_name, optional_scopes, least privilege per request, scopes.tf, clients.tf, ecosystem-audience-mapper, onboarding, terraform apply, terraform_data client_config_guard, lifecycle precondition, YAML 1.1 boolean keys, unquoted kid timestamp, JWK use sig, JWKSUtils.getKeyWrappersForUse, key rotation, hospital_e-l2, ADR 0002, ADR 0003, ADR 0004, ADR 0006]
 ---
 
 # Config model
@@ -69,7 +69,7 @@ jwks:
 `terraform_data.client_config_guard` hard-fails the apply when:
 
 - an L2 file sets both `jwks_url` and `jwks`, or neither;
-- `jwks.keys` is missing or empty, a key lacks `kty` or `kid`, or two keys share a `kid`;
+- `jwks.keys` is missing or empty, a key lacks `kty`, `kid` or `use: "sig"`, or two keys share a `kid`. `use` is required because Keycloak skips inline (`jwks.string`) keys without it, while `jwks_url` keys without `use` count as `sig` — so a hosted JWKS copied inline needs `"use": "sig"` added;
 - a JWK member name decoded as a boolean. Terraform's `yamldecode` is YAML 1.1, so an unquoted `n:` / `y:` key becomes `false` / `true`. **Quote all member names and values** — unquoted values aren't caught by the guard: a date-style `"kid": 2024-05-01` decodes to `2024-05-01T00:00:00Z` and silently stops matching the assertion's `kid`;
 - a key carries private or symmetric material (`d`, `p`, `q`, `dp`, `dq`, `qi`, `oth`, `k`).
 

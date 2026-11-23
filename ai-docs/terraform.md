@@ -43,7 +43,7 @@ Adding a hospital = one new YAML file + `terraform apply`. No HCL changes needed
 
 ### Public key source — `extra_config`
 
-`extra_config` is a `merge()`: both `use.jwks.url` and `use.jwks.string` are always written (one `"true"`, one `"false"`), but only the active value (`jwks.url` **or** `jwks.string`). Keycloak drops empty attributes, so writing the unused value as `""` would show as a diff on every plan. When a client switches modes, the old value stays on the KC client but is inert because its `use.*` flag is `"false"`. The guard preconditions (exactly one source, well-formed inline set, no unquoted `n`/`y` keys, no private key members) are on `terraform_data.client_config_guard`, see [config-model.md](config-model.md#inline-jwks-jwks).
+`extra_config` is a `merge()`: both `use.jwks.url` and `use.jwks.string` are always written (one `"true"`, one `"false"`), but only the active value (`jwks.url` **or** `jwks.string`). Keycloak drops empty attributes, so writing the unused value as `""` would show as a diff on every plan. When a client switches modes, the old value stays on the KC client but is inert because its `use.*` flag is `"false"`. The guard preconditions (exactly one source, well-formed inline set with `use: "sig"` on every key, no unquoted `n`/`y` keys, no private key members) are on `terraform_data.client_config_guard`, see [config-model.md](config-model.md#inline-jwks-jwks).
 
 ## realm.tf — `umzh-context` client policy
 
