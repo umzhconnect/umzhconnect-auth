@@ -1,6 +1,6 @@
 ---
 recap: "Bruno collection structure and the mandatory Node.js sandbox switch for L2 requests — QuickJS lacks crypto/fs/path."
-keywords: [Bruno, QuickJS, Node.js sandbox, unsafe, --sandbox unsafe, Developer mode, green shield, l2KeysDir, crypto module, fs module, path module, pre-request scripts, bru run, local environment, private_key_jwt, RFC 7523, L1, client_secret, placerL1ClientId, placerL1ClientSecret, m2m_l1_client_secrets, ADR 0004, docs block, docs tab, folder docs, collection docs, jwks-server, jwksServerUrl, clientId, .well-known, hospital_a-l2.jwks.json, hosted JWKS, jwks.url, hospital_c, generateKeyPairSync, unreachable jwks_url, contextReference, taskContextReference, foreignContextToken, authorization_details, invalid_authorization_details]
+keywords: [Bruno, QuickJS, Node.js sandbox, unsafe, --sandbox unsafe, Developer mode, green shield, l2KeysDir, crypto module, fs module, path module, pre-request scripts, bru run, local environment, private_key_jwt, RFC 7523, L1, client_secret, placerL1ClientId, placerL1ClientSecret, m2m_l1_client_secrets, ADR 0004, docs block, docs tab, folder docs, collection docs, jwks-server, jwksServerUrl, clientId, .well-known, hospital_a-l2.jwks.json, hosted JWKS, jwks.url, hospital_c, generateKeyPairSync, hospital_e, inlineJwksClientId, inline JWKS, jwks.string, ADR 0006, unreachable jwks_url, contextReference, taskContextReference, foreignContextToken, authorization_details, invalid_authorization_details]
 ---
 
 # Bruno collection
@@ -55,6 +55,10 @@ If Bruno cannot resolve the demo key path, set the `l2KeysDir` variable in `brun
 ## Hospital C: onboarded but unreachable jwks_url (`negative/10-unreachable-jwks-hospital_c.bru`)
 
 `keycloak-config/clients/hospital_c-l2.yaml` onboards a third demo hospital, but its `jwks_url` points at a real external host (`https://hospital_c.example/...`), not `jwks-server` — there's no matching `keys/hospital_c.key` in this repo. The pre-request script generates a throwaway RSA keypair with `crypto.generateKeyPairSync` (no file to read) purely to produce a syntactically valid assertion; the request still fails because Keycloak can't reach `hospital_c.example` to fetch/verify against in the first place.
+
+## Hospital E: inline JWKS (`auth/10-get-token-inline-jwks.bru`, `negative/20-inline-jwks-wrong-key.bru`)
+
+`keycloak-config/clients/hospital_e-l2.yaml` registers its public key inline (`jwks:` map → Keycloak `jwks.string`) instead of a `jwks_url` ([ADR 0006](../docs/adr/0006-inline-client-jwks.md)). `auth/10` signs with `keys/hospital_e-l2.key` (kid `hospital_e-l2`) and expects 200. `negative/20` uses the same `kid` but signs with hospital_a's key and expects 400 `invalid_client`. That shows Keycloak verifies against the stored set. Both use the `inlineJwksClientId` environment variable. There's no `jwks-server` file for hospital_e: nothing is fetched.
 
 ## L1 debug token (`09-get-placer-token-l1.bru`)
 
