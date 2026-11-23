@@ -4,10 +4,12 @@
 # tfstate-persisting PVC before running terraform, so this image can be
 # treated as read-only/immutable at every sync.
 #
-# Only the Terraform module and the default scopes.yaml are baked in. Client
-# files (keycloak-config/clients/) are NOT: the ones in this repo are demo
-# clients (some with committed private keys), and real clients are seeded by
-# the deployment repo's configurator image layered on top of this one.
+# Only the Terraform module is baked in. keycloak-config/ (scopes.yaml and
+# clients/) is deployment config, owned and supplied solely by the
+# deployment repo's configurator image layered on top of this one. This
+# repo's clients are demo clients (some with committed private keys), and a
+# baked default would silently survive the configurator's COPY, which merges
+# rather than replaces. Without the configurator's scopes.yaml the apply
+# fails loudly in scopes.tf instead of falling back to a default.
 FROM hashicorp/terraform:1.15
 COPY terraform /src/terraform
-COPY keycloak-config/scopes.yaml /src/keycloak-config/scopes.yaml

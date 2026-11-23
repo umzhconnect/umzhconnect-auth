@@ -66,12 +66,13 @@ images** and the gitops repo's manifests reference them by tag — exactly
 like `keycloak`/`token-validator` already were:
 
 - **`tf-config`** (`tf-config/Dockerfile`, `FROM hashicorp/terraform:1.15`) —
-  `COPY terraform /src/terraform`, `COPY keycloak-config/scopes.yaml /src/keycloak-config/scopes.yaml`.
-  No client files: `keycloak-config/clients/` in this repo holds demo clients
-  only (some with private keys committed under `keys/`), and Docker `COPY`
-  in a layered configurator merges rather than replaces, so anything baked
-  here would be provisioned in every deployment built on top of it. Real
-  clients come solely from the deployment repo's configurator layer.
+  `COPY terraform /src/terraform` only. No `keycloak-config/` at all:
+  clients and `scopes.yaml` are deployment config owned by the deployment
+  repo's configurator layer. This repo's `keycloak-config/clients/` holds
+  demo clients only (some with private keys committed under `keys/`), and
+  Docker `COPY` in a layered configurator merges rather than replaces, so
+  anything baked here would silently survive in every deployment built on
+  top of it.
   The `keycloak-config` Job copies `/src/*` onto its `tf-workspace` PVC before
   running `terraform apply`, so `terraform.tfstate` still persists across Job
   re-runs even though the image itself is immutable per tag.
@@ -84,8 +85,8 @@ like `keycloak`/`token-validator` already were:
 
 Onboarding a client is a single point of edit in the deployment repo: add
 its YAML under the configurator's `keycloak-config/clients/` and rebuild that
-image. `scopes.yaml` is baked here as the default; a configurator that ships
-its own `scopes.yaml` replaces it.
+image. The configurator must also ship `scopes.yaml`; without it
+`terraform apply` fails in `scopes.tf` (no default is baked here).
 
 ### The gitops repo's own configurator layer
 
