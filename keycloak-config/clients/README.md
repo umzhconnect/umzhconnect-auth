@@ -41,9 +41,11 @@ jwks:
       "n": "xm6lGEu12pwD..."
 ```
 
-- **Quote the JWK member names.** Terraform reads YAML 1.1, where an
-  unquoted `n:` or `y:` key becomes the boolean `false` / `true`. Terraform
-  fails the apply when that happens.
+- **Quote the JWK member names and values.** Terraform reads YAML 1.1, where
+  an unquoted `n:` or `y:` key becomes the boolean `false` / `true`, and
+  Terraform fails the apply when that happens. Unquoted values are rewritten
+  silently: a date-style `"kid": 2024-05-01` becomes `2024-05-01T00:00:00Z`
+  and no longer matches the assertion's `kid`.
 - **Public keys only.** The apply fails if a key contains `d`, `p`, `q`,
   `dp`, `dq`, `qi`, `oth` or `k`. If that happens, the private key has been
   exposed and must be replaced, not just removed from the file.

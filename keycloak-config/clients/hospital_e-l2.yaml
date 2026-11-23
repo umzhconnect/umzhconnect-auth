@@ -3,12 +3,7 @@ client_name: "Hospital E"
 organization_reference: "https://fhir.hospital_e.example/fhir/Organization/HospitalE"
 fhir_url: "https://fhir.hospital_e.example/fhir"
 auth_level: "L2"
-# Inline JWKS instead of jwks_url (ADR 0006) — for hospitals that can't host
-# their own JWKS endpoint. Public key parts only; Terraform rejects any key
-# carrying private members (d, p, q, dp, dq, qi, oth, k).
-# Quote the JWK member names: YAML 1.1 decodes an unquoted n: / y: key as a
-# boolean, which Terraform rejects.
-# Demo key: matching private key is keys/hospital_e-l2.key.
+# Inline JWKS instead of jwks_url (ADR 0006); rules in keycloak-config/clients/README.md.
 jwks:
   keys:
     - "kty": "RSA"
