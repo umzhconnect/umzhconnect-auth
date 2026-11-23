@@ -1,6 +1,6 @@
 ---
 recap: "Dev Kubernetes/ArgoCD deployment record spanning three repos — this repo builds base images, tch-umzh-connect-gitops holds all ArgoCD/k8s manifests plus its own configurator/keycloak-config layer, tch-syseng-argocd-gitops holds the Application CR. Covers the compose-to-k8s translation, why config crosses the repo boundary as baked images rather than ConfigMaps, the gitops repo's own configurator image for deployment-specific client onboarding, and what's still outstanding."
-keywords: [tch-umzh-connect-gitops, tch-syseng-argocd-gitops, argocd, kustomization.yaml, kgateway, Gateway, HTTPRoute, postgres-operator, postgresql.acid.zalan.do, umzh-connect namespace, auth.umzh.dev.example.com, tf-workspace, tf-config, configurator, configurator/Dockerfile, keycloak-config, ci-keycloak.yml, ci-token-validator.yml, ci-tf-config.yml, ci-jwks-server.yml, ci-configurator.yml, GHCR_PULL_TOKEN, allow_l1_debug_clients, argocd-image-updater, deploy key, write-back, trafficpolicy-ip-whitelist]
+keywords: [tch-umzh-connect-gitops, tch-syseng-argocd-gitops, argocd, kustomization.yaml, kgateway, Gateway, HTTPRoute, postgres-operator, postgresql.acid.zalan.do, umzh-connect namespace, auth.umzh.dev.example.com, tf-workspace, tf-config, tf-provider-mirror, filesystem mirror, terraformrc, TF_CLI_CONFIG_FILE, configurator, configurator/Dockerfile, keycloak-config, ci-keycloak.yml, ci-token-validator.yml, ci-tf-config.yml, ci-jwks-server.yml, ci-configurator.yml, GHCR_PULL_TOKEN, allow_l1_debug_clients, argocd-image-updater, deploy key, write-back, trafficpolicy-ip-whitelist]
 ---
 
 # UMZH Connect Auth Server — dev k8s deployment
@@ -66,7 +66,12 @@ images** and the gitops repo's manifests reference them by tag — exactly
 like `keycloak`/`token-validator` already were:
 
 - **`tf-config`** (`tf-config/Dockerfile`, `FROM hashicorp/terraform:1.15`) —
-  `COPY terraform /src/terraform` only. No `keycloak-config/` at all:
+  Terraform CLI + the locked providers as an offline filesystem mirror
+  (`/providers`, `TF_CLI_CONFIG_FILE=/etc/terraformrc`, same mechanism as
+  `tf-provider-mirror/`, linux_amd64 only) + the module
+  (`COPY terraform/*.tf terraform/.terraform.lock.hcl /src/terraform/`, never
+  a build host's `.terraform/` or `terraform.tfstate`). The Job's
+  `terraform init` therefore needs no registry or proxy access. No `keycloak-config/` at all:
   clients and `scopes.yaml` are deployment config owned by the deployment
   repo's configurator layer. This repo's `keycloak-config/clients/` holds
   demo clients only (some with private keys committed under `keys/`), and

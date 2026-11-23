@@ -12,6 +12,10 @@
 # BUILD-TIME needs registry egress (the download happens once, here, on a
 # machine with proxy access). RUNTIME (in-cluster) needs none. Rebuild only
 # when the providers pinned in terraform/.terraform.lock.hcl change.
+#
+# tf-config/Dockerfile embeds the same mirror (plus the module), so a
+# deployment running the tf-config image doesn't need this one; it's for
+# setups that bring their own module on top of a plain offline terraform.
 # =============================================================================
 
 # ---- Stage 1: download providers into a filesystem mirror (linux/amd64) ------
